@@ -1,0 +1,19 @@
+# Cloudflare Workers static-assets deploy for the CaseClock landing page.
+#   wrangler deploy                  # from the repo root (wrangler is OAuth-authed)
+# Serves apps/landing as a static site at caseclock.dhanjit.me.
+#
+# The app PWA (apps/app) deploys separately — see apps/app/wrangler.toml
+# (app.caseclock.dhanjit.me).
+#
+# NOTE: top-level keys (routes) MUST precede the [assets] table — in TOML,
+# anything after a table header belongs to that table.
+
+name = "caseclock-landing"
+compatibility_date = "2025-06-01"
+
+routes = [
+  { pattern = "caseclock.dhanjit.me", custom_domain = true }
+]
+
+[assets]
+directory = "./apps/landing"

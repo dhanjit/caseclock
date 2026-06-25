@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+/* CaseClock design language: dark, dense-but-calm.
+   Severity palette (RESEARCH §10): statutory-critical = red, statutory = amber,
+   court = blue, soft = slate. Exposed as tokens so rules/UI share one source. */
+@theme {
+  --color-ink: #e5edff;
+  --color-ink-dim: #9aa7c7;
+  --color-surface: #0b1120;
+  --color-surface-2: #121a2e;
+  --color-surface-3: #1a2540;
+  --color-line: #243049;
+
+  --color-critical: #f4496d;
+  --color-statutory: #f5a524;
+  --color-court: #3b82f6;
+  --color-soft: #64748b;
+  --color-ok: #22c55e;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, Inter, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}

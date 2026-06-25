@@ -1,0 +1,18 @@
+import { create } from "zustand";
+
+export type View =
+  | { kind: "dashboard" }
+  | { kind: "new" }
+  | { kind: "case"; id: string }
+  | { kind: "review" }
+  | { kind: "settings" };
+
+interface NavState {
+  view: View;
+  go: (view: View) => void;
+}
+
+export const useNav = create<NavState>((set) => ({
+  view: { kind: "dashboard" },
+  go: (view) => set({ view }),
+}));

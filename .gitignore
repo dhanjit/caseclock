@@ -1,0 +1,42 @@
+# deps
+node_modules/
+.pnpm-store/
+
+# builds
+dist/
+dist-ssr/
+build/
+*.local
+
+# capacitor native build artifacts
+apps/app/android/app/build/
+apps/app/android/.gradle/
+apps/app/android/local.properties
+apps/app/ios/App/Pods/
+apps/app/ios/App/build/
+apps/app/android/app/release/
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# wasm build intermediates (the encrypted wa-sqlite artifact is committed under src/db/wasm/)
+apps/app/.wasm-build/
+
+# env / secrets (never committed; secrets live in Infisical)
+.env
+.env.*
+!.env.example
+
+# editor / os
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+Thumbs.db
+
+# test / coverage
+coverage/
+*.log
+playwright-report/
+test-results/

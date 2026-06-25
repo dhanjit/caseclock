@@ -1,0 +1,20 @@
+# Cloudflare Workers static-assets deploy for the CaseClock PWA.
+#   pnpm build                       # produces ./dist
+#   wrangler deploy                  # from apps/app  (wrangler is OAuth-authed)
+# Serves the built app at app.caseclock.dhanjit.me. All data stays on-device
+# (OPFS) — the host only serves static assets, no user data ever touches it.
+#
+# NOTE: top-level keys (routes) MUST precede the [assets] table — in TOML,
+# anything after a table header belongs to that table.
+
+name = "caseclock-app"
+compatibility_date = "2025-06-01"
+
+routes = [
+  { pattern = "app.caseclock.dhanjit.me", custom_domain = true }
+]
+
+[assets]
+directory = "./dist"
+# SPA: serve index.html for any unmatched path (the app has no server routes).
+not_found_handling = "single-page-application"

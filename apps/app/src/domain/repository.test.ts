@@ -1,0 +1,71 @@
+import { describe, it, expect } from "vitest";
+import { MemoryDbClient } from "@/db/memory-client";
+import { CaseRepository, type CaseAggregate } from "./repository";
+import { computeDeadlines } from "@/rules/engine";
+import { addDays } from "@/rules/dates";
+import { DEFAULT_SETTINGS, type CaseRecord } from "./types";
+
+function uapaCase(): CaseAggregate {
+  const c: CaseRecord = {
+    id: "case-47",
+    firNumber: "112/2025",
+    firDate: "2025-04-20",
+    punishmentBand: "10plus",
+    uapaFlag: true,
+    sexualOffenceInScope: false,
+    eFirFlag: false,
+    custodyStatus: "in_custody",
+    arrestDate: "2025-05-01",
+    uapaExtensionGranted: true,
+    status: "custody",
+  };
+  return { case: c, persons: [], hearings: [], supervisionEntries: [], tasks: [] };
+}
+
+describe("CaseRepository (M2) ⇄ rules engine (M3)", () => {
+  it("saves, lists, and round-trips an aggregate, then recomputes its deadlines", async () => {
+    const db = new MemoryDbClient();
+    await db.createVault("x");
+    const repo = new CaseRepository(db);
+
+    await repo.save(uapaCase(), 1000);
+    expect(await repo.count()).toBe(1);
+
+    const list = await repo.list();
+    expect(list).toHaveLength(1);
+    expect(list[0].case.firNumber).toBe("112/2025");
+
+    const got = await repo.get("case-47");
+    expect(got).not.toBeNull();
+
+    // M2 → M3: the retrieved UAPA case computes its arrest-anchored FR/chargesheet clock.
+    const deadlines = computeDeadlines(got!.case, got!.persons, got!.hearings, DEFAULT_SETTINGS, "2025-06-01");
+    const fr1 = deadlines.find((d) => d.ruleId === "fr1-chargesheet");
+    expect(fr1).toBeDefined();
+    expect(fr1!.dueAt).toBe(addDays("2025-05-01", 150)); // UAPA target from arrest
+    expect(fr1!.track).toBe("investigation");
+  });
+
+  it("upsert updates an existing case in place", async () => {
+    const db = new MemoryDbClient();
+    await db.createVault("x");
+    const repo = new CaseRepository(db);
+    const agg = uapaCase();
+
+    await repo.save(agg, 1000);
+    agg.case.status = "chargesheet";
+    await repo.save(agg, 2000);
+
+    expect(await repo.count()).toBe(1);
+    expect((await repo.get("case-47"))!.case.status).toBe("chargesheet");
+  });
+
+  it("remove deletes the case", async () => {
+    const db = new MemoryDbClient();
+    await db.createVault("x");
+    const repo = new CaseRepository(db);
+    await repo.save(uapaCase(), 1000);
+    await repo.remove("case-47");
+    expect(await repo.count()).toBe(0);
+  });
+});

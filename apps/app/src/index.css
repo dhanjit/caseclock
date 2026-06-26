@@ -28,10 +28,51 @@ body,
   height: 100%;
 }
 
+html,
+body {
+  background: var(--color-surface);
+}
+
 body {
   margin: 0;
-  background: var(--color-surface);
+  /* #root is the scroll container (see below), not the body. */
+  overflow: hidden;
   color: var(--color-ink);
   font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, Inter, sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* Native-app feel: no grey flash on tap. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Edge-to-edge safe areas. The status bar is black-translucent and the app runs
+   under it (viewport-fit=cover), so the shell pads itself by the device insets:
+   the iPad status bar at the top and the home indicator / rounded corners around
+   it. Same dark surface fills the inset regions, so it reads as one canvas.
+
+   #root is THE scroll container (definite height so `min-h-full` children still
+   fill a short screen; overflow-y:auto so the padding-bottom inset travels to the
+   end of long, scrolled content instead of being stranded one viewport down).
+   No rubber-band overscroll revealing a different colour behind the app. */
+#root {
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* iOS zooms the whole page when a focused field's text is under 16px. On any
+   touch device (coarse pointer OR no-hover — an iPad with a Magic Keyboard
+   trackpad reports a fine pointer yet still pops the on-screen keyboard on tap),
+   floor form controls at 16px so focusing a field never triggers that jarring
+   zoom-and-pan. Desktop with a real mouse keeps the denser type. */
+@media (hover: none), (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }

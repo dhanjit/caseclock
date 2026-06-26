@@ -1,0 +1,10 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Full-bleed source for raster icons (apple-touch-icon + maskable PNGs).
+       No rounded corners / no transparency: iOS masks home-screen icons itself,
+       and Android maskable crops to its own shape. The clock sits inside the
+       maskable safe zone (a centre circle of radius 0.4·512=205; clock r+stroke
+       ≈ 167 < 205). The rounded-corner variant lives in icon.svg. -->
+  <rect width="512" height="512" fill="#0b1120"/>
+  <circle cx="256" cy="256" r="150" fill="none" stroke="#3b82f6" stroke-width="34"/>
+  <path d="M256 168 v96 l64 42" fill="none" stroke="#e5edff" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

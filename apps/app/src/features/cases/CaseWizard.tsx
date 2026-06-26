@@ -266,7 +266,9 @@ export function CaseWizard() {
         </Section>
       </div>
 
-      <div className="sticky bottom-0 mt-4 border-t border-line bg-surface/80 py-3 backdrop-blur">
+      {/* sticky bottom-0 pins to the scroll-container edge; add the home-indicator
+          inset to the bar's own bottom padding so Save/Cancel never sit under it. */}
+      <div className="sticky bottom-0 mt-4 border-t border-line bg-surface/80 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur">
         {(validationErrors.length > 0 || saveError) && (
           <ul className="mb-2 space-y-0.5 text-right text-xs text-critical">
             {validationErrors.map((e) => (

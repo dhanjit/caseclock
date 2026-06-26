@@ -5,6 +5,7 @@
 
 import { create } from "zustand";
 import { createDbClient, type DbClient } from "@/db";
+import { requestPersistentStorage } from "@/lib/platform";
 
 export type SessionStatus = "loading" | "no-vault" | "locked" | "unlocked" | "unsupported";
 
@@ -42,6 +43,9 @@ export const useSession = create<SessionState>((set) => ({
     set({ error: null });
     try {
       await client.createVault(passphrase);
+      // The device now holds the only copy of this data — ask the browser not to
+      // evict it (best-effort; installed PWAs are most likely to be granted).
+      void requestPersistentStorage();
       set({ status: "unlocked", error: null });
     } catch (e) {
       console.error("[CaseClock] createVault failed:", e);
@@ -54,6 +58,7 @@ export const useSession = create<SessionState>((set) => ({
     set({ error: null });
     try {
       await client.unlock(passphrase);
+      void requestPersistentStorage();
       set({ status: "unlocked", error: null });
     } catch (e) {
       console.error("[CaseClock] unlock failed:", e);

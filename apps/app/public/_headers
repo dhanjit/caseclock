@@ -1,0 +1,37 @@
+# Cloudflare Workers static-assets HTTP headers (parsed automatically; no
+# wrangler.toml change needed). Lives in the assets dir root (Vite copies
+# public/ → dist/).
+
+# Security headers on every response. The Content-Security-Policy is the
+# browser-enforced backstop for the product's load-bearing invariant: the
+# decrypted vault (DEK + plaintext SQLite, in memory while unlocked) must never
+# leave the device. connect-src 'self' means a compromised/typo-squatted
+# dependency physically cannot POST it anywhere. Notes on each non-obvious source:
+#   script-src 'wasm-unsafe-eval' — SQLite and libsodium (Argon2id) compile
+#     WebAssembly; without it they fail. (No 'unsafe-eval'; wasm only.)
+#   style-src 'unsafe-inline'     — React/runtime inline style attributes.
+#   frame-src www.openstreetmap.org — the OPT-IN, warned map embed (PlacePanel);
+#     the only intentional cross-origin surface, and it loads in its own context.
+#   object/base/form/frame-ancestors locked down — no plugins, no base-tag
+#     hijack, no form posts, no clickjacking.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self' blob:; frame-src https://www.openstreetmap.org; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+
+# Cloudflare's default for every asset is "public, max-age=0, must-revalidate",
+# so index.html, sw.js and the manifest are already revalidated on every request
+# — a redeploy goes live immediately (the "fast updates" guarantee). The only
+# thing worth overriding is the content-hashed build output, which never changes
+# for a given URL and so can be cached forever.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Be explicit that the service worker and entry HTML must always revalidate, so
+# a new deploy's SW/shell is picked up the moment the device is online — even if
+# a future default ever changes.
+/sw.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate

@@ -23,16 +23,20 @@ import {
   addMonths,
   addWorkingDays,
   diffDays,
+  monthsBetween,
   type ISODate,
 } from "./dates";
 import {
   custodyLimits,
+  processRequestLabel,
   type CaseRecord,
   type DeadlineEvent,
   type DeadlineState,
   type DeadlineTrack,
+  type EvidenceRecord,
   type HearingRecord,
   type PersonRecord,
+  type ProcessRequestRecord,
   type Settings,
   type Severity,
   type Verified,
@@ -52,6 +56,8 @@ interface RuleCtx {
   c: CaseRecord;
   persons: PersonRecord[];
   hearings: HearingRecord[];
+  evidence: EvidenceRecord[];
+  processRequests: ProcessRequestRecord[];
   settings: Settings;
   today: ISODate;
 }
@@ -73,29 +79,12 @@ function stateVs(dueAt: ISODate, today: ISODate, done: boolean): DeadlineState {
   return diffDays(today, dueAt) > 0 ? "overdue" : "active";
 }
 
-/** Inclusive list of YYYY-MM from startYM through endYM (capped at 600 months). */
-function monthsBetween(startYM: string, endYM: string): string[] {
-  const [sy, sm] = startYM.split("-").map(Number);
-  const [ey, em] = endYM.split("-").map(Number);
-  if (sy > ey || (sy === ey && sm > em)) return [endYM];
-  const out: string[] = [];
-  let y = sy;
-  let m = sm;
-  let guard = 0;
-  while ((y < ey || (y === ey && m <= em)) && guard++ < 600) {
-    out.push(`${y}-${String(m).padStart(2, "0")}`);
-    m += 1;
-    if (m > 12) {
-      m = 1;
-      y += 1;
-    }
-  }
-  return out;
-}
-
 const LEAD_CRITICAL = [15, 7, 3, 1];
 const LEAD_STATUTORY = [7, 3];
-const LEAD_COURT = [10, 7, 3];
+// Routine trial-track hearings carry a 15-day lead (REQUIREMENTS §4.2) — same head
+// start the Superior Court Zone gets, so charge-framing / deposition / final-argument
+// listings surface 15 days out, not 10.
+const LEAD_COURT = [15, 10, 7, 3];
 
 export const RULE_REGISTRY: Rule[] = [
   // ---- e-FIR -------------------------------------------------------------
@@ -286,6 +275,36 @@ export const RULE_REGISTRY: Rule[] = [
       }
       return { type: "UAPA 43-D(2) PP extension report", dueAt: day90, state, owes: "PP", note };
     },
+  },
+  // Expert-report 2-day follow-up (REQUIREMENTS §4.1 / §5 heading 9) — FSL, ballistic,
+  // device imaging etc. Fires RED once an expert report is pending beyond 2 days from
+  // its forwarding date, and clears the moment the report is marked received.
+  {
+    id: "expert-report-2day",
+    lawRef: "Expert-report follow-up — pending >2 days from forwarding",
+    verified: "confirmed",
+    severity: "statutory",
+    track: "investigation",
+    leadOffsets: [1],
+    applies: () => true,
+    compute: ({ evidence, today }) =>
+      evidence
+        .filter((e) => e.reportKind === "expert" && !!e.forwardedDate)
+        .map((e) => {
+          const due = addDays(e.forwardedDate!, 2);
+          const received = e.status === "received";
+          // Overdue from the forwarding date + 2 (inclusive): pending on day 2 already
+          // owes the FSL a reminder. Receipt switches it off regardless of the date.
+          const state: DeadlineState = received ? "done" : diffDays(today, due) >= 0 ? "overdue" : "active";
+          return {
+            type: `Expert report pending — ${e.reportToObtain || e.description}`,
+            dueAt: due,
+            occurrenceDate: due,
+            state,
+            owes: "FSL" as const,
+            note: "Auto-alert: pending >2 days from forwarding; clears when the report is marked received.",
+          };
+        }),
   },
 
 
@@ -569,6 +588,30 @@ export const RULE_REGISTRY: Rule[] = [
         })),
   },
 
+  // ---- Process & Requests tracker (REQUIREMENTS §6) ----------------------
+  // LOC / MLA-LR / Interpol / NBW / FRRO-MEA etc. — each carries an expected-response
+  // date; the request alerts once that date passes while still requested/pending.
+  {
+    id: "process-request-overdue",
+    lawRef: "Process & Requests — expected-response follow-up (§6)",
+    verified: "confirmed",
+    severity: "court",
+    track: "process",
+    leadOffsets: [7, 3, 1],
+    applies: () => true,
+    compute: ({ processRequests, today }) =>
+      processRequests
+        .filter((r) => !!r.expectedResponseDate && (r.status === "requested" || r.status === "pending"))
+        .map((r) => ({
+          type: `${processRequestLabel(r)} — response${r.refNo ? ` (${r.refNo})` : ""}`,
+          dueAt: r.expectedResponseDate!,
+          occurrenceDate: r.expectedResponseDate!,
+          state: stateVs(r.expectedResponseDate!, today, false),
+          owes: "self" as const,
+          note: "Follow up — expected response date has been set for this request.",
+        })),
+  },
+
   // ---- Supervisory -------------------------------------------------------
   {
     id: "review-overdue",
@@ -649,11 +692,13 @@ export function computeDeadlines(
   hearings: HearingRecord[],
   settings: Settings,
   today: ISODate,
+  evidence: EvidenceRecord[] = [],
+  processRequests: ProcessRequestRecord[] = [],
 ): DeadlineEvent[] {
   const out: DeadlineEvent[] = [];
   for (const rule of RULE_REGISTRY) {
     if (!rule.applies(c)) continue;
-    const res = rule.compute({ c, persons, hearings, settings, today });
+    const res = rule.compute({ c, persons, hearings, evidence, processRequests, settings, today });
     if (!res) continue;
     for (const r of Array.isArray(res) ? res : [res]) {
       out.push({

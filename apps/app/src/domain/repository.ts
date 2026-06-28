@@ -10,6 +10,7 @@ import type {
   EvidenceRecord,
   HearingRecord,
   PersonRecord,
+  ProcessRequestRecord,
   SupervisionEntryRecord,
   TaskRecord,
 } from "./types";
@@ -21,6 +22,7 @@ export interface CaseAggregate {
   supervisionEntries: SupervisionEntryRecord[];
   tasks: TaskRecord[];
   evidence?: EvidenceRecord[]; // §5 / heading 9 — added in Phase 3 (optional for old records)
+  processRequests?: ProcessRequestRecord[]; // §6 Process & Requests tracker (V3 — optional for old records)
 }
 
 export class CaseRepository {

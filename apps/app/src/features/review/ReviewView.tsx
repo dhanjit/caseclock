@@ -24,7 +24,7 @@ export function ReviewView() {
 
   const groups = useMemo(() => {
     const score = (agg: CaseAggregate) => {
-      const ds = computeDeadlines(agg.case, agg.persons, agg.hearings, DEFAULT_SETTINGS, today);
+      const ds = computeDeadlines(agg.case, agg.persons, agg.hearings, DEFAULT_SETTINGS, today, agg.evidence ?? [], agg.processRequests ?? []);
       let s = 0;
       if (ds.some((d) => d.ruleId === "review-overdue" && d.state === "overdue")) s += 4;
       if (ds.some((d) => d.ruleId === "untouched")) s += 2;

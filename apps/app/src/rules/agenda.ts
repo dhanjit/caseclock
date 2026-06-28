@@ -9,6 +9,7 @@
 
 import { computeDeadlines } from "./engine";
 import { diffDays, type ISODate } from "./dates";
+import { caseLabel } from "@/lib/format";
 import type { CaseAggregate } from "@/domain/repository";
 import type { DeadlineEvent, Settings, Severity } from "@/domain/types";
 
@@ -20,6 +21,10 @@ export interface AgendaItem {
   deadline: DeadlineEvent;
   bucket: AgendaBucket;
   daysUntil: number | null;
+  priority: boolean; // the case is user-flagged priority (§1)
+  // Non-priority cases still compute their deadlines but alert SILENTLY (§1): their
+  // overdue items are flagged so the dashboard keeps them out of the loud RED tier.
+  silent: boolean;
 }
 
 export interface Agenda {
@@ -38,11 +43,7 @@ const SEVERITY_RANK: Record<Severity, number> = {
 };
 
 function label(agg: CaseAggregate): string {
-  const c = agg.case;
-  const head = c.policeStation ? `FIR ${c.firNumber} · ${c.policeStation}` : `FIR ${c.firNumber}`;
-  // Include the identity so a watchlisted name in it surfaces (and auto-REDs) on
-  // the dashboard, the one screen the officer scans first.
-  return c.identity ? `${head} — ${c.identity}` : head;
+  return caseLabel(agg.case);
 }
 
 function bucketFor(d: DeadlineEvent, today: ISODate, horizon: number): AgendaBucket | null {
@@ -70,7 +71,16 @@ export function buildAgenda(
   const items: AgendaItem[] = [];
   for (const agg of aggregates) {
     if (agg.case.status === "closed") continue; // closed cases don't generate agenda items
-    const deadlines = computeDeadlines(agg.case, agg.persons, agg.hearings, settings, today);
+    const priority = agg.case.priority === true;
+    const deadlines = computeDeadlines(
+      agg.case,
+      agg.persons,
+      agg.hearings,
+      settings,
+      today,
+      agg.evidence ?? [],
+      agg.processRequests ?? [],
+    );
     for (const d of deadlines) {
       const bucket = bucketFor(d, today, horizon);
       if (!bucket) continue;
@@ -80,6 +90,10 @@ export function buildAgenda(
         deadline: d,
         bucket,
         daysUntil: d.dueAt ? diffDays(d.dueAt, today) : null,
+        priority,
+        // Lighter cases still surface, but their overdue items alert silently — the
+        // dashboard shows them in a muted "monitoring" lane, not the red Overdue tier.
+        silent: !priority && bucket === "overdue",
       });
     }
   }
@@ -113,7 +127,15 @@ export function casesNeedingAttention(
   const flags: AttentionFlag[] = [];
   for (const agg of aggregates) {
     if (agg.case.status === "closed") continue;
-    const deadlines = computeDeadlines(agg.case, agg.persons, agg.hearings, settings, today);
+    const deadlines = computeDeadlines(
+      agg.case,
+      agg.persons,
+      agg.hearings,
+      settings,
+      today,
+      agg.evidence ?? [],
+      agg.processRequests ?? [],
+    );
     const reasons: string[] = [];
     if (deadlines.some((d) => d.ruleId === "untouched")) reasons.push("untouched");
     if (deadlines.some((d) => d.ruleId === "review-overdue" && d.state === "overdue")) reasons.push("review overdue");

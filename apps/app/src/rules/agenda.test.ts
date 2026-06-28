@@ -23,7 +23,8 @@ describe("agenda projection", () => {
   it("buckets an elapsed default-bail clock as overdue and a far hearing as upcoming", () => {
     const a = agg({ id: "A", firNumber: "11/2025", arrestDate: "2025-01-01", custodyStatus: "in_custody" });
     const b = agg({ id: "B", firNumber: "22/2025" }, {
-      hearings: [{ id: "h1", caseId: "B", hearingDate: "2025-06-16", purpose: "trial" }],
+      // 20 days out — beyond the new 15-day trial lead (§4.2), so it stays "upcoming"
+      hearings: [{ id: "h1", caseId: "B", hearingDate: "2025-06-21", purpose: "trial" }],
     });
 
     const agenda = buildAgenda([a, b], DEFAULT_SETTINGS, "2025-06-01");
@@ -33,10 +34,37 @@ describe("agenda projection", () => {
   });
 
   it("puts a lead-offset hit into Today", () => {
-    // hearing exactly 7 days out → court-hearing-prep lead [10,7,3] hits today
+    // hearing exactly 7 days out → court-hearing-prep lead [15,10,7,3] hits today
     const b = agg({ id: "B" }, { hearings: [{ id: "h", caseId: "B", hearingDate: "2025-06-08", purpose: "trial" }] });
     const agenda = buildAgenda([b], DEFAULT_SETTINGS, "2025-06-01");
     expect(agenda.today.some((i) => i.deadline.ruleId === "court-hearing-prep")).toBe(true);
+  });
+
+  it("threads evidence + process-requests through to the agenda (§4.1 / §6)", () => {
+    const a = agg({ id: "X", firNumber: "9/2026" }, {
+      evidence: [
+        { id: "ev", caseId: "X", description: "Passports", reportToObtain: "Forgery report", status: "pending", reportKind: "expert", forwardedDate: "2026-06-10" },
+      ],
+      processRequests: [
+        { id: "rq", caseId: "X", type: "custom", customLabel: "FRRO / MEA", accusedIds: [], status: "pending", expectedResponseDate: "2026-06-20" },
+      ],
+    });
+    const agenda = buildAgenda([a], DEFAULT_SETTINGS, "2026-06-27");
+    expect(agenda.overdue.some((i) => i.deadline.ruleId === "expert-report-2day")).toBe(true);
+    expect(agenda.overdue.some((i) => i.deadline.ruleId === "process-request-overdue")).toBe(true);
+  });
+
+  it("priority cases alert loudly; non-priority overdue items are flagged silent (§1)", () => {
+    const overdueClock = { arrestDate: "2025-01-01", custodyStatus: "in_custody" as const };
+    const loud = agg({ id: "P", priority: true, ...overdueClock });
+    const quiet = agg({ id: "Q", ...overdueClock });
+    const agenda = buildAgenda([loud, quiet], DEFAULT_SETTINGS, "2025-06-01");
+    const p = agenda.overdue.find((i) => i.caseId === "P")!;
+    const q = agenda.overdue.find((i) => i.caseId === "Q")!;
+    expect(p.priority).toBe(true);
+    expect(p.silent).toBe(false);
+    expect(q.priority).toBe(false);
+    expect(q.silent).toBe(true);
   });
 
   it("flags stale + heavy-clock cases as needing attention", () => {

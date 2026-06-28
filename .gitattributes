@@ -8,3 +8,4 @@
 *.apk binary
 *.keystore binary
 *.jks binary
+*.docx binary

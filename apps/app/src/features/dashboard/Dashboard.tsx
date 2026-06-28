@@ -65,6 +65,9 @@ export function Dashboard() {
         subtitle="Local-first case & deadline cockpit"
         actions={
           <>
+            <button onClick={() => go({ kind: "search" })} title="Search cases" className={btn("ghost")}>
+              🔍 Search
+            </button>
             <button onClick={() => go({ kind: "review" })} className={btn("ghost")}>
               Review
             </button>

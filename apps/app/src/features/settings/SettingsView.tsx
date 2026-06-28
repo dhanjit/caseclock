@@ -5,6 +5,9 @@ import { useCases } from "@/state/cases";
 import { useWatchlist } from "@/state/watchlist";
 import { exportBackup, prepareImport, applyImport, type BackupInfo } from "@/db/backup";
 import { loadSampleData } from "@/state/seed";
+import { buildAllCasesIcs } from "@/domain/ics";
+import { DEFAULT_SETTINGS } from "@/domain/types";
+import { todayISO } from "@/rules/dates";
 import { estimateStrength } from "@/lib/passphrase";
 import { fmtDate } from "@/lib/format";
 import { Section, Field } from "@/features/components/bits";
@@ -186,6 +189,8 @@ export function SettingsView() {
           {impMsg && <p className="mt-2 text-xs text-ok">{impMsg}</p>}
         </Section>
 
+        <CalendarExport />
+
         <WatchlistManager />
 
         <DemoData />
@@ -199,6 +204,41 @@ export function SettingsView() {
         </Section>
       </div>
     </div>
+  );
+}
+
+function CalendarExport() {
+  const aggregates = useCases((s) => s.aggregates);
+  const [busy, setBusy] = useState(false);
+
+  function doExportIcs() {
+    setBusy(true);
+    try {
+      const ics = buildAllCasesIcs(aggregates, DEFAULT_SETTINGS, todayISO());
+      const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const now = new Date();
+      a.href = url;
+      a.download = `caseclock-deadlines-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}.ics`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Section title="Calendar export (.ics)">
+      <p className="mb-3 text-xs text-ink-dim">
+        One-way snapshot of every live case's statutory deadlines, hearings and reminders
+        (15-day + 1-day alerts). Import into Apple / Google / Outlook Calendar. <strong>Not a live sync</strong> —
+        re-export after changes. Closed cases are excluded.
+      </p>
+      <button onClick={doExportIcs} disabled={busy || aggregates.length === 0} className={`${btn("primary")} disabled:opacity-40`}>
+        {busy ? "Building…" : "Export deadlines (.ics)"}
+      </button>
+    </Section>
   );
 }
 

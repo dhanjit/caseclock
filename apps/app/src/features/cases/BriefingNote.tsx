@@ -28,7 +28,6 @@ export function BriefingNote({ agg, onDone }: { agg: CaseAggregate; onDone: () =
   const finishedRef = useRef(false);
 
   useEffect(() => {
-    document.body.classList.add("print-active");
     let timer: ReturnType<typeof setTimeout> | undefined;
     const finish = () => {
       if (finishedRef.current) return;
@@ -48,8 +47,12 @@ export function BriefingNote({ agg, onDone }: { agg: CaseAggregate; onDone: () =
     };
   }, []);
 
-  // Trigger the OS print dialog only after the briefing has painted.
+  // The body class MUST be added before window.print() runs, and the print CSS
+  // gates the whole note->A4 swap on it. useLayoutEffect runs (and its rAF fires)
+  // before the passive useEffect above, so add the class HERE — otherwise the
+  // first print could render the dark SPA instead of the note.
   useLayoutEffect(() => {
+    document.body.classList.add("print-active");
     const raf = requestAnimationFrame(() => window.print());
     return () => cancelAnimationFrame(raf);
   }, []);

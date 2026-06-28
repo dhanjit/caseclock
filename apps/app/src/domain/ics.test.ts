@@ -9,6 +9,7 @@ import {
   type IcsOptions,
 } from "./ics";
 import { sampleAggregates } from "@/domain/seed";
+import { computeDeadlines } from "@/rules/engine";
 import { DEFAULT_SETTINGS } from "@/domain/types";
 import type { CaseAggregate } from "@/domain/repository";
 import type { CaseRecord, HearingRecord, Settings } from "@/domain/types";
@@ -45,6 +46,20 @@ function minimalCase(over: Partial<CaseRecord> = {}): CaseRecord {
 function aggOf(c: CaseRecord, hearings: HearingRecord[] = []): CaseAggregate {
   return { case: c, persons: [], hearings, supervisionEntries: [], tasks: [] };
 }
+
+describe("buildCaseIcs — soft supervisory events stay out of the calendar (agenda parity)", () => {
+  it("excludes review-overdue / untouched soft events though they have a real dueAt + overdue state", () => {
+    // A case overdue for supervisory review (past nextReviewDate) AND stale.
+    const c = minimalCase({ nextReviewDate: "2026-01-01", lastTouchedAt: "2025-01-01" });
+    // The engine DOES generate the soft events...
+    const dl = computeDeadlines(c, [], [], DEFAULT_SETTINGS, TODAY, [], []);
+    expect(dl.some((d) => d.severity === "soft")).toBe(true);
+    // ...but they must NOT reach the .ics (agenda keeps them out of the deadline tiers too).
+    const ics = buildCaseIcs(aggOf(c), DEFAULT_SETTINGS, TODAY, OPTS);
+    expect(ics).not.toContain("Supervisory review due");
+    expect(ics).not.toContain("Case untouched");
+  });
+});
 
 describe("escapeText", () => {
   it("escapes backslash FIRST so subsequent escapes are not double-escaped", () => {
@@ -87,6 +102,14 @@ describe("eventUid", () => {
 
   it("sanitises whitespace and stray @ in the parts", () => {
     expect(eventUid("case 1", "rule@x", "k")).toBe("case-1-rule-x-k@caseclock");
+  });
+
+  it("strips RFC-5545 TEXT delimiters (, ; : \\) so the UID stays one bare token", () => {
+    // d.type can carry user free-text (process-request label, expert-report 'reportToObtain').
+    const uid = eventUid("c1", "expert-report-2day", "2026-06-27-evil, and; bad: x\\y");
+    expect(uid).toBe("c1-expert-report-2day-2026-06-27-evil-and-bad-x-y@caseclock");
+    // No raw delimiter survives anywhere except the intended trailing @caseclock suffix.
+    expect(uid.replace("@caseclock", "")).not.toMatch(/[,;:\\@]/);
   });
 });
 

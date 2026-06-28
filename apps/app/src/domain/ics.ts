@@ -51,6 +51,20 @@ const UID_SUFFIX = "@caseclock";
 const SKIP_STATES = new Set(["done", "na", "extinguished", "latent"]);
 
 /**
+ * Does this computed deadline belong on a subscribed calendar? Mirrors
+ * agenda.bucketFor exactly: drop inert states, drop null due dates, and drop
+ * "soft" supervisory items (review-overdue / untouched) — those live in the
+ * in-app "needs attention" lane, NOT the statutory deadline tiers, so they must
+ * stay out of the officer's calendar too (kept in lock-step to avoid drift).
+ */
+function isCalendarable(d: DeadlineEvent): d is DeadlineEvent & { dueAt: ISODate } {
+  if (d.dueAt === null) return false;
+  if (SKIP_STATES.has(d.state)) return false;
+  if (d.severity === "soft") return false;
+  return true;
+}
+
+/**
  * Escape a value for an RFC-5545 TEXT property. Backslash MUST be escaped first so
  * the escapes we add for `,` `;` `\n` aren't themselves re-escaped. ':' and '@' are
  * legal in property values and are deliberately left as-is.
@@ -109,9 +123,11 @@ function utf8Bytes(s: string): Uint8Array {
 
 /** Deterministic, stable UID for a calendar event. */
 export function eventUid(caseId: string, kind: string, key: string): string {
-  // Strip characters that would break the UID line; the suffix keeps UIDs globally
-  // namespaced to CaseClock so re-exports update rather than duplicate.
-  const clean = (s: string) => s.replace(/[\s@]+/g, "-");
+  // Collapse whitespace AND every RFC-5545 TEXT delimiter / escape char (, ; : \ @)
+  // to a single dash so the UID stays one bare, escape-free token that round-trips
+  // byte-identically across strict clients (Apple/Google) — the stable-UID dedup the
+  // re-export design depends on. The suffix namespaces UIDs to CaseClock.
+  const clean = (s: string) => s.replace(/[\s@,;:\\]+/g, "-");
   return `${clean(caseId)}-${clean(kind)}-${clean(key)}${UID_SUFFIX}`;
 }
 
@@ -160,8 +176,7 @@ function deadlineEvents(agg: CaseAggregate, settings: Settings, today: ISODate):
   );
   const out: IcsEvent[] = [];
   for (const d of deadlines) {
-    if (d.dueAt === null) continue;
-    if (SKIP_STATES.has(d.state)) continue;
+    if (!isCalendarable(d)) continue;
     out.push({
       // ruleId alone is not unique: a single rule can emit several events on the same
       // dueAt (e.g. two expert reports forwarded the same day, or per-accused s.479

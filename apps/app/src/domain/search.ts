@@ -74,13 +74,14 @@ export function searchCases(
 
   const hits: SearchHit[] = [];
 
-  aggregates.forEach((agg, caseIdx) => {
+  // Newest-first input (repo lists ORDER BY updated_at DESC). Recency is NOT folded
+  // into the score (a numeric nudge can cross a field-class gap at large N); instead
+  // score = FIELD_WEIGHT + positional, and the final STABLE sort preserves this
+  // newest-first push order for equal scores — recency as a pure, gap-proof tiebreak.
+  for (const agg of aggregates) {
     const c = agg.case;
     const label = caseLabel(c);
     const accused = agg.persons.filter((p) => p.role === "accused");
-    // Newest-first input (repo lists ORDER BY updated_at DESC) → a tiny per-index
-    // penalty makes recency the tiebreak without disturbing class/positional order.
-    const recency = caseIdx * 0.001;
 
     // Best hit per field within this case (avoids flooding one case's row list).
     const best = new Map<SearchField, SearchHit>();
@@ -88,7 +89,7 @@ export function searchCases(
       if (!value) return;
       const pos = positional(norm(value), qNorm);
       if (pos < 0) return;
-      const score = FIELD_WEIGHT[field] + pos - recency;
+      const score = FIELD_WEIGHT[field] + pos;
       const prev = best.get(field);
       if (!prev || score > prev.score) {
         best.set(field, { caseId: c.id, caseLabel: label, field, snippet: snippet ?? value, matchedText: query, score });
@@ -114,7 +115,7 @@ export function searchCases(
       const disp = fmtDate(iso);
       const pos = Math.max(positional(norm(iso), qNorm), positional(norm(disp), qNorm));
       if (pos < 0) continue;
-      const score = FIELD_WEIGHT.date + pos - recency;
+      const score = FIELD_WEIGHT.date + pos;
       const prev = best.get("date");
       if (!prev || score > prev.score) {
         best.set("date", { caseId: c.id, caseLabel: label, field: "date", snippet: disp, matchedText: query, score });
@@ -152,7 +153,7 @@ export function searchCases(
         if (!corpus.some((blob) => blob.includes(wlNorm))) continue; // present in this case?
         const pos = positional(wlNorm, qNorm); // does the query match the banned-org name?
         if (pos < 0) continue;
-        const score = FIELD_WEIGHT.watchlist + pos - recency;
+        const score = FIELD_WEIGHT.watchlist + pos;
         const prev = best.get("watchlist");
         if (!prev || score > prev.score) {
           best.set("watchlist", { caseId: c.id, caseLabel: label, field: "watchlist", snippet: wl, matchedText: query, score });
@@ -161,7 +162,7 @@ export function searchCases(
     }
 
     for (const hit of best.values()) hits.push(hit);
-  });
+  }
 
   hits.sort((a, b) => b.score - a.score);
   return hits;

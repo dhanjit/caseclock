@@ -2,13 +2,14 @@ import { describe, it, expect } from "vitest";
 import type { Database } from "@sqlite.org/sqlite-wasm";
 import { createDb } from "./sqlite-blob";
 import { applyMigrations, MIGRATIONS } from "./schema";
+import type { Bind } from "./types";
 
 function io(db: Database) {
   return {
-    exec: async (sql: string, bind: (string | number | null)[] = []) => {
+    exec: async (sql: string, bind: Bind = []) => {
       db.exec({ sql, bind });
     },
-    query: async <T extends Record<string, unknown>>(sql: string, bind: (string | number | null)[] = []) =>
+    query: async <T extends Record<string, unknown>>(sql: string, bind: Bind = []) =>
       db.selectObjects(sql, bind) as T[],
   };
 }

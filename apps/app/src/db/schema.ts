@@ -6,6 +6,8 @@
  * is keyed on meta.schema_version so adding tables is purely additive.
  */
 
+import type { Bind } from "./types";
+
 export const SCHEMA_VERSION = 2;
 
 /** Ordered migration steps. Index i upgrades the DB from version i to i+1. */
@@ -42,8 +44,8 @@ export function bootstrapSql(): string[] {
 }
 
 interface MigrationIO {
-  exec: (sql: string, bind?: (string | number | null)[]) => Promise<void>;
-  query: <T extends Record<string, unknown>>(sql: string, bind?: (string | number | null)[]) => Promise<T[]>;
+  exec: (sql: string, bind?: Bind) => Promise<void>;
+  query: <T extends Record<string, unknown>>(sql: string, bind?: Bind) => Promise<T[]>;
 }
 
 /**

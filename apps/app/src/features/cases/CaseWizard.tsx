@@ -32,6 +32,7 @@ export function CaseWizard() {
   const [band, setBand] = useState<PunishmentBand>("3to7");
   const [uapa, setUapa] = useState(false);
   const [sexual, setSexual] = useState(false);
+  const [priority, setPriority] = useState(false);
   const [eFir, setEFir] = useState(false);
   const [trackOverride, setTrackOverride] = useState<"" | "60" | "90">("");
   const [maxYears, setMaxYears] = useState("");
@@ -92,6 +93,7 @@ export function CaseWizard() {
       lastTouchedAt: today,
       nextReviewDate: nextReview || null,
       outcome: "pending",
+      priority: priority || undefined,
     };
     const persons = accused.trim()
       ? [
@@ -209,6 +211,9 @@ export function CaseWizard() {
             </label>
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={sexual} onChange={(e) => setSexual(e.target.checked)} /> Sexual offence in scope
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={priority} onChange={(e) => setPriority(e.target.checked)} /> Priority case (pin to top, ~10 cap)
             </label>
           </div>
         </Section>

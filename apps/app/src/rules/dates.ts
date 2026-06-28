@@ -74,3 +74,22 @@ export function addWorkingDays(d: ISODate, n: number, holidays: ReadonlySet<stri
 export function maxDate(a: ISODate, b: ISODate): ISODate {
   return diffDays(a, b) >= 0 ? a : b;
 }
+
+/** Inclusive list of YYYY-MM from startYM through endYM (capped at 600 months). */
+export function monthsBetween(startYM: string, endYM: string): string[] {
+  const [sy, sm] = startYM.split("-").map(Number);
+  const [ey, em] = endYM.split("-").map(Number);
+  if (sy > ey || (sy === ey && sm > em)) return [endYM];
+  const out: string[] = [];
+  let y = sy;
+  let m = sm;
+  let guard = 0;
+  while ((y < ey || (y === ey && m <= em)) && guard++ < 600) {
+    out.push(`${y}-${pad(m)}`);
+    if (++m > 12) {
+      m = 1;
+      y += 1;
+    }
+  }
+  return out;
+}

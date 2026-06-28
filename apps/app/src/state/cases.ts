@@ -23,9 +23,14 @@ interface CasesState {
   save: (agg: CaseAggregate) => Promise<void>;
   /** Read-modify-write against the LATEST committed state — overlap-safe. */
   patch: (id: string, updater: (a: CaseAggregate) => CaseAggregate) => Promise<void>;
+  /** Toggle §1 priority. Soft cap ~10 — warns (overCap) but never blocks. */
+  setPriority: (id: string, value: boolean) => Promise<{ priorityCount: number; overCap: boolean }>;
   remove: (id: string) => Promise<void>;
   getById: (id: string) => CaseAggregate | undefined;
 }
+
+/** Recommended cap on simultaneously-prioritised cases (REQUIREMENTS §1: "~10"). */
+export const PRIORITY_SOFT_CAP = 10;
 
 export const useCases = create<CasesState>((set, get) => ({
   aggregates: [],
@@ -50,6 +55,19 @@ export const useCases = create<CasesState>((set, get) => ({
       await repo().save(updater(cur));
       set({ aggregates: await repo().list() });
     });
+  },
+
+  async setPriority(id, value) {
+    // Priority is a supervisory flag, not case work — deliberately does NOT bump
+    // lastTouchedAt (so pinning a quiet case can't mask its staleness).
+    await enqueue(async () => {
+      const cur = get().aggregates.find((a) => a.case.id === id);
+      if (!cur) return;
+      await repo().save({ ...cur, case: { ...cur.case, priority: value } });
+      set({ aggregates: await repo().list() });
+    });
+    const priorityCount = get().aggregates.filter((a) => a.case.priority).length;
+    return { priorityCount, overCap: value && priorityCount > PRIORITY_SOFT_CAP };
   },
 
   async remove(id) {

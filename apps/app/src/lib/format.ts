@@ -1,5 +1,12 @@
 import { diffDays, todayISO, type ISODate } from "@/rules/dates";
-import type { DeadlineTrack, Severity } from "@/domain/types";
+import type { CaseRecord, DeadlineTrack, Severity } from "@/domain/types";
+
+/** Dashboard / agenda case label — FIR + station, with the identity appended so a
+ * watchlisted name in it auto-REDs on the screens that scan it first (§4 / §5). */
+export function caseLabel(c: Pick<CaseRecord, "firNumber" | "policeStation" | "identity">): string {
+  const head = c.policeStation ? `FIR ${c.firNumber} · ${c.policeStation}` : `FIR ${c.firNumber}`;
+  return c.identity ? `${head} — ${c.identity}` : head;
+}
 
 /** Investigation-vs-trial tag (§4) shown on every deadline. */
 export const TRACK_META: Record<DeadlineTrack, { short: string; pill: string }> = {
@@ -8,6 +15,7 @@ export const TRACK_META: Record<DeadlineTrack, { short: string; pill: string }> 
   court: { short: "COURT", pill: "bg-slate-500/15 text-slate-300 border-slate-500/30" },
   superior: { short: "SC/HC", pill: "bg-critical/15 text-critical border-critical/40" },
   supervisory: { short: "SUPV", pill: "bg-soft/15 text-soft border-soft/30" },
+  process: { short: "REQ", pill: "bg-violet-500/15 text-violet-300 border-violet-500/30" },
 };
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

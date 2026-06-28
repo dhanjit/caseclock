@@ -8,12 +8,45 @@
 
 import { useState } from "react";
 import type { CaseAggregate } from "@/domain/repository";
-import type { CaseRecord } from "@/domain/types";
+import {
+  processRequestLabel,
+  uapaSectionWithoutFlag,
+  type CaseRecord,
+  type PersonRecord,
+  type ProcessRequestRecord,
+} from "@/domain/types";
 import { accusedStatusMeta } from "@/domain/accused";
+import { todayISO } from "@/rules/dates";
 import { fmtDate } from "@/lib/format";
 import { Section, Field } from "@/features/components/bits";
 import { Highlighted } from "@/features/components/Highlighted";
 import { btn } from "@/features/components/TopBar";
+import { expertReportOverdue } from "./EvidencePanel";
+
+const CUSTODY_KIND_LABEL: Record<string, string> = { police: "PC", judicial: "JC", other: "custody" };
+
+/** Heading 12 (§3) — compact previous-custody summary from PersonRecord.custodyHistory. */
+function custodySummary(p: PersonRecord): string {
+  return (p.custodyHistory ?? [])
+    .map((h) => {
+      const kind = CUSTODY_KIND_LABEL[h.kind ?? "other"] ?? "custody";
+      if (h.from && h.to) return `${kind} ${fmtDate(h.from)}–${fmtDate(h.to)}`;
+      if (h.from) return `${kind} since ${fmtDate(h.from)}`;
+      return kind;
+    })
+    .join(" · ");
+}
+
+/** Heading 12 — the per-accused LOC/Interpol view, merged from BOTH sources so nothing
+ * is orphaned: the §6 Process & Requests tracker (Decision #1: authoritative) AND the
+ * per-accused LocNotice field still editable in AccusedPanel. */
+function accusedNotices(p: PersonRecord, requests: ProcessRequestRecord[]): string {
+  const fromTracker = requests
+    .filter((r) => r.accusedIds.includes(p.id) && (r.type === "LOC" || r.type === "interpol_red" || r.type === "interpol_blue"))
+    .map((r) => `${processRequestLabel(r)}${r.refNo ? ` (${r.refNo})` : ""}`);
+  const fromLoc = (p.loc ?? []).map((l) => `${l.type}${l.ref ? ` (${l.ref})` : ""}`);
+  return [...fromTracker, ...fromLoc].join(" · ");
+}
 
 const input = "w-full rounded-xl border border-line bg-surface-2 px-3 py-2 text-sm text-ink outline-none focus:border-court";
 
@@ -129,7 +162,15 @@ export function CaseFile({
       <div className="-mt-1">
         <Heading n={1} title="Case number">{text(c.firNumber)}</Heading>
         <Heading n={2} title="Identity of the case">{text(c.identity)}</Heading>
-        <Heading n={3} title="Sections of law">{text(c.sectionsOfLaw)}</Heading>
+        <Heading n={3} title="Sections of law">
+          {text(c.sectionsOfLaw)}
+          {uapaSectionWithoutFlag(c) && (
+            <p className="mt-1 rounded-lg border border-statutory/40 bg-statutory/10 px-2 py-1 text-[11px] text-statutory">
+              ⚠ A UAPA provision is cited but the UAPA flag is off — custody is computing on the
+              scheduled 60/45 track, not UAPA 150/90. Confirm the UAPA flag if this is a UAPA case.
+            </p>
+          )}
+        </Heading>
         <Heading n={4} title="Date of occurrence">{c.occurrenceDate ? fmtDate(c.occurrenceDate) : dash}</Heading>
         <Heading n={5} title="Date of registration">{fmtDate(c.firDate)}</Heading>
         <Heading n={6} title="Brief of the case">{text(c.brief)}</Heading>
@@ -141,7 +182,17 @@ export function CaseFile({
             if (ev.length === 0) return <span className="text-soft">— see Evidences panel below</span>;
             const witnesses = ev.reduce((n, e) => n + (e.witnesses ?? 0), 0);
             const received = ev.filter((e) => e.status === "received").length;
-            return <span>{ev.length} item(s) · {received} received · {witnesses} witness(es)</span>;
+            const overdue = ev.filter((e) => expertReportOverdue(e, todayISO())).length;
+            return (
+              <span>
+                {ev.length} item(s) · {received} received · {witnesses} witness(es)
+                {overdue > 0 && (
+                  <span className="ml-1.5 rounded border border-critical/50 bg-critical/15 px-1.5 py-0.5 text-[10px] font-semibold text-critical">
+                    {overdue} expert report(s) overdue
+                  </span>
+                )}
+              </span>
+            );
           })()}
         </Heading>
         <Heading n={10} title="Status of trial">{text(c.trialStatus)}</Heading>
@@ -154,20 +205,28 @@ export function CaseFile({
             </ul>
           )}
         </Heading>
-        <Heading n={12} title="List of accused with status">
+        <Heading n={12} title="List of accused with status (incl. LOC / Interpol + custody history)">
           {accused.length === 0 ? dash : (
-            <div className="flex flex-wrap gap-1.5">
-              {accused.map((p) => (
-                <span key={p.id} className="inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs">
-                  <Highlighted text={p.name} />
-                  {p.accusedStatus && (
-                    <span className={`rounded px-1.5 py-0.5 text-[11px] ${accusedStatusMeta(p.accusedStatus).badge}`}>
-                      {accusedStatusMeta(p.accusedStatus).label}
-                    </span>
-                  )}
-                </span>
-              ))}
-            </div>
+            <ul className="space-y-1.5">
+              {accused.map((p) => {
+                const custody = custodySummary(p);
+                const notices = accusedNotices(p, agg.processRequests ?? []);
+                return (
+                  <li key={p.id} className="rounded-md border border-line/60 px-2 py-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Highlighted text={p.name} />
+                      {p.accusedStatus && (
+                        <span className={`rounded px-1.5 py-0.5 text-[11px] ${accusedStatusMeta(p.accusedStatus).badge}`}>
+                          {accusedStatusMeta(p.accusedStatus).label}
+                        </span>
+                      )}
+                    </div>
+                    {custody && <p className="mt-0.5 text-[11px] text-ink-dim">Custody: {custody}</p>}
+                    {notices && <p className="text-[11px] text-ink-dim">LOC / Interpol: <Highlighted text={notices} /></p>}
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </Heading>
         <Heading n={13} title="Plan of action">{text(c.planOfAction)}</Heading>

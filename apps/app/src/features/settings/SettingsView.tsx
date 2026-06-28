@@ -4,6 +4,7 @@ import { useNav } from "@/state/nav";
 import { useCases } from "@/state/cases";
 import { useWatchlist } from "@/state/watchlist";
 import { exportBackup, prepareImport, applyImport, type BackupInfo } from "@/db/backup";
+import { loadSampleData } from "@/state/seed";
 import { estimateStrength } from "@/lib/passphrase";
 import { fmtDate } from "@/lib/format";
 import { Section, Field } from "@/features/components/bits";
@@ -187,6 +188,8 @@ export function SettingsView() {
 
         <WatchlistManager />
 
+        <DemoData />
+
         <Section title="Security">
           <ul className="space-y-1.5 text-xs text-ink-dim">
             <li>• All data is encrypted on this device (AES-256-GCM, Argon2id). No cloud, no servers, no telemetry.</li>
@@ -196,6 +199,36 @@ export function SettingsView() {
         </Section>
       </div>
     </div>
+  );
+}
+
+function DemoData() {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  async function load() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await loadSampleData();
+      setMsg("Loaded 2 sample cases (and the ULFA-I watchlist entry). Open the dashboard to see them.");
+    } catch (e) {
+      setMsg(`Failed: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Section title="Demo data">
+      <p className="mb-3 text-xs text-ink-dim">
+        Loads the two acceptance cases from the sample files — every panel and alert populated
+        (expert-report 2-day, Process &amp; Requests, custody production, Superior Court Zone, priority pinning).
+        Idempotent: re-loading just refreshes them.
+      </p>
+      <button onClick={load} disabled={busy} className={`${btn("primary")} disabled:opacity-40`}>
+        {busy ? "Loading…" : "Load sample cases"}
+      </button>
+      {msg && <p className="mt-2 text-xs text-ok">{msg}</p>}
+    </Section>
   );
 }
 

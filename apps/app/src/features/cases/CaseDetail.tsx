@@ -11,6 +11,7 @@ import {
   type EvidenceRecord,
   type HearingRecord,
   type PersonRecord,
+  type ProcessRequestRecord,
   type SupervisionEntryRecord,
 } from "@/domain/types";
 import { newId } from "@/lib/id";
@@ -24,6 +25,7 @@ import { InvestigationPanel } from "./InvestigationPanel";
 import { TrialPanel } from "./TrialPanel";
 import { HearingsPanel } from "./HearingsPanel";
 import { EvidencePanel } from "./EvidencePanel";
+import { RequestsPanel } from "./RequestsPanel";
 import { SanctionsPanel } from "./SanctionsPanel";
 import { PlacePanel } from "./PlacePanel";
 import { ReferenceLawsPanel } from "./ReferenceLawsPanel";
@@ -33,6 +35,7 @@ const input = "w-full rounded-xl border border-line bg-surface-2 px-3 py-2 text-
 export function CaseDetail({ id }: { id: string }) {
   const agg = useCases((s) => s.getById(id));
   const patch = useCases((s) => s.patch);
+  const setPriority = useCases((s) => s.setPriority);
   const go = useNav((s) => s.go);
   const lock = useSession((s) => s.lock);
   const today = todayISO();
@@ -43,9 +46,21 @@ export function CaseDetail({ id }: { id: string }) {
   const [nextReview, setNextReview] = useState("");
   const [busy, setBusy] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
+  const [priorityWarn, setPriorityWarn] = useState<string | null>(null);
 
   const deadlines = useMemo(
-    () => (agg ? computeDeadlines(agg.case, agg.persons, agg.hearings, DEFAULT_SETTINGS, today) : []),
+    () =>
+      agg
+        ? computeDeadlines(
+            agg.case,
+            agg.persons,
+            agg.hearings,
+            DEFAULT_SETTINGS,
+            today,
+            agg.evidence ?? [],
+            agg.processRequests ?? [],
+          )
+        : [],
     [agg, today],
   );
 
@@ -114,6 +129,14 @@ export function CaseDetail({ id }: { id: string }) {
   async function saveEvidence(evidence: EvidenceRecord[]) {
     await patch(id, (a) => ({ ...a, evidence, case: { ...a.case, lastTouchedAt: today } }));
   }
+  async function saveRequests(processRequests: ProcessRequestRecord[]) {
+    await patch(id, (a) => ({ ...a, processRequests, case: { ...a.case, lastTouchedAt: today } }));
+  }
+  async function togglePriority() {
+    if (!agg) return;
+    const { priorityCount, overCap } = await setPriority(id, !agg.case.priority);
+    setPriorityWarn(overCap ? `${priorityCount} cases are flagged priority — the recommended cap is ~10. Consider demoting a quieter one.` : null);
+  }
 
   return (
     <div className="mx-auto flex min-h-full max-w-3xl flex-col px-4 pb-24 pt-5">
@@ -122,6 +145,14 @@ export function CaseDetail({ id }: { id: string }) {
         subtitle={[c.policeStation, c.uapaFlag ? "UAPA" : null, c.district].filter(Boolean).join(" · ")}
         actions={
           <>
+            <button
+              onClick={() => void togglePriority()}
+              title={c.priority ? "Priority case — pinned to dashboard top" : "Flag as priority (pin to top)"}
+              aria-pressed={!!c.priority}
+              className={c.priority ? `${btn("ghost")} border-critical/50 text-critical` : btn("ghost")}
+            >
+              {c.priority ? "★ Priority" : "☆ Priority"}
+            </button>
             <button onClick={() => go({ kind: "dashboard" })} className={btn("ghost")}>
               Back
             </button>
@@ -131,6 +162,9 @@ export function CaseDetail({ id }: { id: string }) {
           </>
         }
       />
+      {priorityWarn && (
+        <p className="mt-2 rounded-lg border border-statutory/40 bg-statutory/10 px-3 py-2 text-xs text-statutory">⚠ {priorityWarn}</p>
+      )}
 
       {/* Context-restore header */}
       {(gapDays >= 3 || latest) && (
@@ -210,6 +244,7 @@ export function CaseDetail({ id }: { id: string }) {
 
       {/* Phase 3 panels: evidence·sanctions·place·reference laws */}
       <EvidencePanel agg={agg} onSaveEvidence={saveEvidence} />
+      <RequestsPanel agg={agg} onSaveRequests={saveRequests} />
       <SanctionsPanel agg={agg} onSaveCase={saveCase} />
       <PlacePanel agg={agg} onSaveCase={saveCase} />
       <ReferenceLawsPanel />

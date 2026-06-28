@@ -5,8 +5,10 @@ import {
   DEFAULT_SETTINGS,
   type CaseRecord,
   type DeadlineEvent,
+  type EvidenceRecord,
   type HearingRecord,
   type PersonRecord,
+  type ProcessRequestRecord,
 } from "@/domain/types";
 
 const base: CaseRecord = {
@@ -24,8 +26,15 @@ const base: CaseRecord = {
 function mk(over: Partial<CaseRecord>): CaseRecord {
   return { ...base, ...over };
 }
-function run(c: CaseRecord, today: string, persons: PersonRecord[] = [], hearings: HearingRecord[] = []): DeadlineEvent[] {
-  return computeDeadlines(c, persons, hearings, DEFAULT_SETTINGS, today);
+function run(
+  c: CaseRecord,
+  today: string,
+  persons: PersonRecord[] = [],
+  hearings: HearingRecord[] = [],
+  evidence: EvidenceRecord[] = [],
+  processRequests: ProcessRequestRecord[] = [],
+): DeadlineEvent[] {
+  return computeDeadlines(c, persons, hearings, DEFAULT_SETTINGS, today, evidence, processRequests);
 }
 function find(evts: DeadlineEvent[], ruleId: string): DeadlineEvent | undefined {
   return evts.find((e) => e.ruleId === ruleId);
@@ -203,8 +212,111 @@ describe("kept clocks (verified extras)", () => {
   });
 });
 
+describe("expert-report 2-day auto-alert (§4.1)", () => {
+  const mkEv = (over: Partial<EvidenceRecord>): EvidenceRecord => ({
+    id: "ev1",
+    caseId: "c1",
+    description: "Seized mobile phones",
+    reportToObtain: "Device imaging / CFSL cyber report",
+    status: "pending",
+    reportKind: "expert",
+    ...over,
+  });
+  const expert = (c: CaseRecord, today: string, ev: EvidenceRecord[]) =>
+    find(run(c, today, [], [], ev), "expert-report-2day");
+
+  it("day 0 (just forwarded): active, not overdue", () => {
+    const e = expert(mk({}), "2025-05-01", [mkEv({ forwardedDate: "2025-05-01" })])!;
+    expect(e.state).toBe("active");
+    expect(e.dueAt).toBe(addDays("2025-05-01", 2));
+    expect(e.owes).toBe("FSL");
+    expect(e.track).toBe("investigation");
+  });
+
+  it("day 1: still active (within the 2-day grace)", () => {
+    expect(expert(mk({}), "2025-05-02", [mkEv({ forwardedDate: "2025-05-01" })])!.state).toBe("active");
+  });
+
+  it("forwarded + 2 days: overdue (RED) — the 2-day boundary fires", () => {
+    expect(expert(mk({}), "2025-05-03", [mkEv({ forwardedDate: "2025-05-01" })])!.state).toBe("overdue");
+  });
+
+  it("marked received: done regardless of how long it ran", () => {
+    const e = expert(mk({}), "2025-06-01", [mkEv({ forwardedDate: "2025-05-01", status: "received", receivedDate: "2025-04-20" })])!;
+    expect(e.state).toBe("done");
+  });
+
+  it("non-expert reports and un-forwarded expert reports never alert", () => {
+    const evs = [
+      mkEv({ id: "e1", reportKind: "other", forwardedDate: "2025-05-01" }),
+      mkEv({ id: "e2", reportKind: "expert", forwardedDate: null }),
+    ];
+    expect(run(mk({}), "2025-06-01", [], [], evs).filter((d) => d.ruleId === "expert-report-2day")).toHaveLength(0);
+  });
+
+  it("emits one row per forwarded expert report", () => {
+    const evs = [
+      mkEv({ id: "e1", forwardedDate: "2025-05-01" }),
+      mkEv({ id: "e2", description: "Two foreign passports", forwardedDate: "2025-05-10" }),
+    ];
+    expect(run(mk({}), "2025-06-01", [], [], evs).filter((d) => d.ruleId === "expert-report-2day")).toHaveLength(2);
+  });
+});
+
+describe("process & requests tracker (§6) — expected-response overdue", () => {
+  const mkReq = (over: Partial<ProcessRequestRecord>): ProcessRequestRecord => ({
+    id: "r1",
+    caseId: "c1",
+    type: "MLA_LR",
+    accusedIds: [],
+    status: "pending",
+    ...over,
+  });
+  const req = (today: string, rs: ProcessRequestRecord[]) =>
+    find(run(mk({}), today, [], [], [], rs), "process-request-overdue");
+
+  it("before the expected-response date: active", () => {
+    const e = req("2026-07-01", [mkReq({ expectedResponseDate: "2026-08-14" })])!;
+    expect(e.state).toBe("active");
+    expect(e.track).toBe("process");
+    expect(e.dueAt).toBe("2026-08-14");
+  });
+
+  it("past the expected-response date while pending: overdue (the 45-day / 15-day clocks fire)", () => {
+    expect(req("2026-06-27", [mkReq({ refNo: "REF-FR/12", expectedResponseDate: "2026-06-20" })])!.state).toBe("overdue");
+  });
+
+  it("granted / executed / rejected requests stop alerting", () => {
+    const rs: ProcessRequestRecord[] = [
+      mkReq({ id: "a", status: "granted", expectedResponseDate: "2026-06-01" }),
+      mkReq({ id: "b", status: "executed", expectedResponseDate: "2026-06-01" }),
+      mkReq({ id: "c", status: "rejected", expectedResponseDate: "2026-06-01" }),
+    ];
+    expect(run(mk({}), "2026-06-27", [], [], [], rs).filter((d) => d.ruleId === "process-request-overdue")).toHaveLength(0);
+  });
+
+  it("a request with no expected-response date does not alert", () => {
+    expect(req("2026-06-27", [mkReq({ status: "requested", expectedResponseDate: null })])).toBeUndefined();
+  });
+
+  it("custom type uses its label in the row", () => {
+    const e = req("2026-06-27", [mkReq({ type: "custom", customLabel: "FRRO / MEA verification", expectedResponseDate: "2026-06-20" })])!;
+    expect(e.type).toMatch(/FRRO \/ MEA verification/);
+  });
+});
+
+describe("routine trial 15-day lead (§4.2)", () => {
+  it("routine (non-superior) court hearings now carry a 15-day lead, not 10", () => {
+    const hearings: HearingRecord[] = [{ id: "h", caseId: "c1", hearingDate: "2026-07-20", purpose: "trial" }];
+    const e = find(run(mk({}), "2026-06-20", [], hearings), "court-hearing-prep")!;
+    expect(e.leadOffsets).toContain(15);
+  });
+});
+
 /** Doc-sync: every rule's exact law reference pinned here; drift fails CI. */
 const EXPECTED_LAWREFS: Record<string, string> = {
+  "expert-report-2day": "Expert-report follow-up — pending >2 days from forwarding",
+  "process-request-overdue": "Process & Requests — expected-response follow-up (§6)",
   "efir-3day": "BNSS 173(1)(ii)",
   "production-24h": "BNSS 58 + 187(1); Art. 22(2)",
   "fr1-chargesheet": "Chargesheet/FR limit from arrest (BNSS 187(3) / UAPA 43-D(2))",

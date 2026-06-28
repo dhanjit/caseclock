@@ -48,7 +48,7 @@ export type Outcome = "pending" | "convicted" | "acquitted";
 export type CustodyCaseType = "uapa" | "scheduled_higher" | "scheduled_lower";
 
 /** Which engine a deadline belongs to — investigation vs trial, tagged on the dashboard (§4). */
-export type DeadlineTrack = "investigation" | "trial" | "court" | "supervisory" | "superior";
+export type DeadlineTrack = "investigation" | "trial" | "court" | "supervisory" | "superior" | "process";
 
 /** Sanction tracking (REQUIREMENTS §5). */
 export type SanctionStatus = "na" | "required" | "pending" | "obtained";
@@ -61,6 +61,12 @@ export interface EvidenceRecord {
   reportToObtain?: string;
   status: "pending" | "received";
   witnesses?: number | null;
+  // Expert-report 2-day auto-alert (REQUIREMENTS §4.1): FSL / ballistic / device
+  // imaging etc. fire RED once pending beyond 2 days from the forwarding date and
+  // clear the instant the report is marked received.
+  reportKind?: "expert" | "other"; // only "expert" reports drive the 2-day alert
+  forwardedDate?: ISODate | null; // date the exhibit/sample was sent to the lab
+  receivedDate?: ISODate | null; // optional — set when the report comes back
 }
 
 /** LOC / Interpol notices per accused (§5). */
@@ -69,6 +75,57 @@ export interface LocNotice {
   type: "LOC" | "RCN" | "Blue" | "Yellow" | "other";
   ref?: string;
   status?: string;
+}
+
+/** Process & Requests tracker (REQUIREMENTS §6) — formal requests raised during
+ * arrest / investigation, linked to the accused. The case-level superset of the
+ * per-accused LocNotice; the expected-response date drives the overdue alert. */
+export type ProcessRequestType =
+  | "LOC"
+  | "MLA_LR" // MLA / Letters Rogatory
+  | "interpol_red"
+  | "interpol_blue"
+  | "NBW"
+  | "proclamation"
+  | "attachment"
+  | "custom";
+
+export type ProcessRequestStatus =
+  | "requested"
+  | "pending"
+  | "granted"
+  | "executed"
+  | "rejected";
+
+export interface ProcessRequestRecord {
+  id: string;
+  caseId: string;
+  type: ProcessRequestType;
+  customLabel?: string; // when type === "custom"
+  accusedIds: string[]; // PersonRecord ids this request is linked to
+  refNo?: string; // reference / letter number
+  dateRaised?: ISODate | null;
+  authority?: string; // authority addressed
+  status: ProcessRequestStatus;
+  expectedResponseDate?: ISODate | null; // drives the §6 overdue alert
+  note?: string;
+}
+
+export const PROCESS_REQUEST_LABEL: Record<ProcessRequestType, string> = {
+  LOC: "LOC (Look-Out Circular)",
+  MLA_LR: "MLA / Letters Rogatory",
+  interpol_red: "Interpol Red Notice",
+  interpol_blue: "Interpol Blue Notice",
+  NBW: "NBW / warrant",
+  proclamation: "Proclamation",
+  attachment: "Attachment",
+  custom: "Custom",
+};
+
+/** Human label for a request row (honours customLabel for custom types). */
+export function processRequestLabel(r: ProcessRequestRecord): string {
+  if (r.type === "custom") return r.customLabel?.trim() || "Custom request";
+  return PROCESS_REQUEST_LABEL[r.type];
 }
 
 /** Previous custody history per accused (§4.1 / heading 12). */
@@ -182,7 +239,11 @@ export interface CaseRecord {
   status: CaseStatus;
   lastTouchedAt?: ISODate | null;
   nextReviewDate?: ISODate | null;
-  priorityHeinous?: boolean;
+  // Fluid user priority (REQUIREMENTS §1) — the officer flags up to ~10 cases that
+  // pin to the top of the dashboard with all engines firing; lighter (non-priority)
+  // cases still auto-compute deadlines but alert silently. Replaces the dead
+  // `priorityHeinous`, which conflated heinousness with this user-driven priority.
+  priority?: boolean;
 }
 
 export interface PersonRecord {
@@ -276,6 +337,19 @@ export function custodyCaseTypeOf(c: CaseRecord): CustodyCaseType {
   // years". 7-to-under-10 (and below) is a 60-day case — mapping it to the higher
   // track would warn ~30 days too late on default bail.
   return c.punishmentBand === "10plus" ? "scheduled_higher" : "scheduled_lower";
+}
+
+/**
+ * Decision #6 guard (V3-BUILD-PLAN): a case whose Sections-of-law text cites a UAPA
+ * provision but whose `uapaFlag` / `custodyCaseType` is unset silently falls onto the
+ * scheduled 60/45 track instead of the UAPA 150/90 one — under-warning on default bail.
+ * Detects that mismatch so the UI can prompt the officer to confirm the UAPA flag.
+ */
+const UAPA_SECTION_RE = /\bUA\s*\(?P\)?\s*A\b|\bUAPA\b|unlawful activities/i;
+export function uapaSectionWithoutFlag(c: CaseRecord): boolean {
+  if (c.uapaFlag) return false;
+  if (c.custodyCaseType === "uapa") return false;
+  return !!c.sectionsOfLaw && UAPA_SECTION_RE.test(c.sectionsOfLaw);
 }
 
 /**

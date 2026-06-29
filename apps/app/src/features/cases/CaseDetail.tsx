@@ -181,6 +181,9 @@ export function CaseDetail({ id }: { id: string }) {
             <button onClick={exportCaseIcs} title="Export this case's deadlines as .ics" className={btn("ghost")}>
               Export .ics
             </button>
+            <button onClick={() => go({ kind: "mindmap", id })} title="Per-case mind map" className={btn("ghost")}>
+              Mind map
+            </button>
             <button onClick={() => go({ kind: "dashboard" })} className={btn("ghost")}>
               Back
             </button>

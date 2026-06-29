@@ -4,6 +4,7 @@ export type View =
   | { kind: "dashboard" }
   | { kind: "new" }
   | { kind: "case"; id: string }
+  | { kind: "mindmap"; id: string }
   | { kind: "search"; q?: string }
   | { kind: "review" }
   | { kind: "settings" };

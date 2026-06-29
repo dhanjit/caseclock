@@ -10,6 +10,7 @@ import { LockScreen } from "@/features/lock/LockScreen";
 import { Dashboard } from "@/features/dashboard/Dashboard";
 import { CaseWizard } from "@/features/cases/CaseWizard";
 import { CaseDetail } from "@/features/cases/CaseDetail";
+import { MindMap } from "@/features/cases/MindMap";
 import { SearchView } from "@/features/search/SearchView";
 import { ReviewView } from "@/features/review/ReviewView";
 import { SettingsView } from "@/features/settings/SettingsView";
@@ -27,6 +28,8 @@ function Shell() {
       return <CaseWizard />;
     case "case":
       return <CaseDetail id={view.id} />;
+    case "mindmap":
+      return <MindMap id={view.id} />;
     case "search":
       return <SearchView />;
     case "review":

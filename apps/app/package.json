@@ -4,8 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "bundle-ocr": "node scripts/bundle-ocr-assets.mjs",
+    "dev": "node scripts/bundle-ocr-assets.mjs && vite",
+    "build": "node scripts/bundle-ocr-assets.mjs && tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

@@ -4,31 +4,29 @@
  * only when the officer enables OCR for an import. Output is always a DRAFT.
  *
  * NO-EGRESS: tesseract.js's defaults fetch the worker / core wasm / eng.traineddata
- * from a CDN (jsdelivr) — which would violate the no-cloud invariant in any context
- * without the CSP (native WebView, dev server). So OCR is ENABLED ONLY when the
- * assets are self-hosted same-origin and VITE_TESSERACT_PATH points at them (e.g.
- * "/tesseract"). When unset, ocrConfigured() is false (the UI hides the toggle) and
- * run() throws rather than hitting a CDN. Callers wrap this in try/catch → graceful
- * degradation to the filename heuristics.
+ * from a CDN (jsdelivr) — which would violate the no-cloud invariant. So we NEVER
+ * use its defaults. The engine + English model are BUNDLED same-origin at
+ * /tesseract by scripts/bundle-ocr-assets.mjs (run on build/dev), so OCR works
+ * fully locally out of the box, offline, zero setup. VITE_TESSERACT_PATH only
+ * OVERRIDES the location (e.g. a CDN-free custom mount). Callers wrap run() in
+ * try/catch → graceful degradation to filename heuristics if assets are missing.
  */
 
 type OcrInput = Blob | HTMLCanvasElement | HTMLImageElement;
 
-/** Are self-hosted OCR assets configured? (Gates the toggle — no CDN fallback.) */
+/** Where the bundled tesseract worker / core / traineddata are served (same-origin). */
+const OCR_BASE = ((import.meta.env.VITE_TESSERACT_PATH as string | undefined) || "/tesseract").replace(/\/$/, "");
+
+/** OCR ships with bundled assets, so it's always available (no CDN fallback). */
 export function ocrConfigured(): boolean {
-  return !!(import.meta.env.VITE_TESSERACT_PATH as string | undefined);
+  return true;
 }
 
 function assetOptions() {
-  const base = (import.meta.env.VITE_TESSERACT_PATH as string | undefined)?.replace(/\/$/, "");
-  if (!base) {
-    // Never fall through to tesseract's CDN defaults — that would egress.
-    throw new Error("OCR assets are not self-hosted (set VITE_TESSERACT_PATH); refusing to fetch from a CDN.");
-  }
   return {
-    workerPath: `${base}/worker.min.js`,
-    corePath: `${base}/`,
-    langPath: base,
+    workerPath: `${OCR_BASE}/worker.min.js`,
+    corePath: `${OCR_BASE}/`, // directory → tesseract loads the LSTM core variant it feature-detects
+    langPath: OCR_BASE, // → ${OCR_BASE}/eng.traineddata.gz (gzip default)
   };
 }
 

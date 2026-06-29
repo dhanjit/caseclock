@@ -18,6 +18,7 @@ import {
 } from "@/domain/document";
 import { importFiles } from "@/domain/import";
 import { buildTextExtractor } from "@/lib/text-extract";
+import { llmAvailable } from "@/lib/llm";
 import { useDocuments } from "@/state/documents";
 import { fmtDate } from "@/lib/format";
 import { Section, Field } from "@/features/components/bits";
@@ -55,11 +56,13 @@ export function DocumentsPanel({ agg }: { agg: CaseAggregate }) {
   const [showManual, setShowManual] = useState(false);
   const [manual, setManual] = useState<DocumentDraft>(emptyManual());
   const [ocr, setOcr] = useState(false);
+  const [llm, setLlm] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
+  const aiAvailable = useMemo(() => llmAvailable(), []);
 
-  // Lazy text extractor — pdf.js / mammoth (+ tesseract OCR when enabled) load
-  // only when an import actually runs, never in the app shell.
-  const extractText = useMemo(() => buildTextExtractor({ ocr, onProgress: setProgress }), [ocr]);
+  // Lazy text extractor — pdf.js / mammoth (+ tesseract OCR / web-llm when enabled)
+  // load only when an import actually runs, never in the app shell.
+  const extractText = useMemo(() => buildTextExtractor({ ocr, llm, onProgress: setProgress }), [ocr, llm]);
 
   useEffect(() => {
     void loadCase(caseId);
@@ -141,6 +144,12 @@ export function DocumentsPanel({ agg }: { agg: CaseAggregate }) {
           <input type="checkbox" checked={ocr} onChange={(e) => setOcr(e.target.checked)} />
           OCR scanned pages
         </label>
+        {aiAvailable && (
+          <label className="flex items-center gap-1.5 text-xs text-ink-dim" title="Reads documents with an on-device model (one-time download, ~1GB). Fully offline. Drafts only.">
+            <input type="checkbox" checked={llm} onChange={(e) => setLlm(e.target.checked)} />
+            Local AI (downloads model)
+          </label>
+        )}
       </div>
       <p className="mt-1 text-[11px] text-soft">
         Offline import — point at case files (an <code>index.csv/json</code>, named <code>date_type_ref.pdf</code>, PDFs

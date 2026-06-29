@@ -14,8 +14,17 @@ import type { DocumentSource } from "@/domain/document";
 export interface ExtractorOptions {
   /** OCR scanned/image PDFs + image files (tesseract.js, lazy). */
   ocr?: boolean;
-  /** Progress callback for long OCR work. */
+  /** Opt-in local LLM refinement of extracted text (web-llm, WebGPU, lazy). */
+  llm?: boolean;
+  /** Progress callback for long OCR/LLM work. */
   onProgress?: (msg: string) => void;
+}
+
+/** Run the optional LLM pass over extracted text (no-op when disabled). */
+async function maybeLlm(text: string, opts: ExtractorOptions) {
+  if (!opts.llm || !text || text.trim().length < 15) return undefined;
+  const { extractWithLLM } = await import("./llm");
+  return (await extractWithLLM(text, opts.onProgress)) ?? undefined;
 }
 
 const PDF_RE = /\.pdf$/i;
@@ -83,24 +92,26 @@ export function buildTextExtractor(opts: ExtractorOptions = {}): TextExtractor {
     try {
       if (PDF_RE.test(name) || file.type === "application/pdf") {
         const text = await pdfText(file);
-        if (text.trim().length >= MIN_TEXT) return { text, source: "pdftext" as DocumentSource };
+        if (text.trim().length >= MIN_TEXT) {
+          return { text, source: "pdftext" as DocumentSource, fields: await maybeLlm(text, opts) };
+        }
         // Scanned PDF (no text layer) → OCR the first page if enabled.
         if (opts.ocr) {
           const { ocrCanvas } = await import("./ocr");
           const canvas = await pdfFirstPageCanvas(file);
           const ocr = await ocrCanvas(canvas, opts.onProgress);
-          return { text: ocr.trim() || null, source: "ocr" as DocumentSource };
+          return { text: ocr.trim() || null, source: "ocr" as DocumentSource, fields: await maybeLlm(ocr, opts) };
         }
         return { text: text.trim() || null, source: "pdftext" as DocumentSource };
       }
       if (DOCX_RE.test(name)) {
         const text = await docxText(file);
-        return { text: text.trim() || null, source: "pdftext" as DocumentSource };
+        return { text: text.trim() || null, source: "pdftext" as DocumentSource, fields: await maybeLlm(text, opts) };
       }
       if (opts.ocr && (IMAGE_RE.test(name) || file.type.startsWith("image/"))) {
         const { ocrBlob } = await import("./ocr");
         const ocr = await ocrBlob(file, opts.onProgress);
-        return { text: ocr.trim() || null, source: "ocr" as DocumentSource };
+        return { text: ocr.trim() || null, source: "ocr" as DocumentSource, fields: await maybeLlm(ocr, opts) };
       }
     } catch (err) {
       opts.onProgress?.(`Extraction failed for ${name}: ${err instanceof Error ? err.message : String(err)}`);

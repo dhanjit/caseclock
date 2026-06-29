@@ -18,8 +18,12 @@ const INDEX_NAME = /index.*\.(csv|json|tsv|txt)$/i;
 const PLAIN_TEXT = /\.(txt|csv|tsv|md|json)$/i;
 
 /** Text extractor for a non-plain-text file (PDF/Word/image). Returns null if it
- *  can't extract any usable text (→ the caller falls back to the filename). */
-export type TextExtractor = (file: File) => Promise<{ text: string | null; source: DocumentSource } | null>;
+ *  can't extract any usable text (→ the caller falls back to the filename).
+ *  `fields` (optional) are richer fields proposed by the local LLM, preferred
+ *  over the regex heuristics where present. */
+export type TextExtractor = (
+  file: File,
+) => Promise<{ text: string | null; source: DocumentSource; fields?: Partial<ExtractedFields> } | null>;
 
 export interface ImportResult {
   drafts: DocumentDraft[];
@@ -81,6 +85,7 @@ export async function importFiles(files: File[], extractText?: TextExtractor): P
     // 2/3. Text extraction (plain text inline, else via the injected hook).
     let text: string | null = null;
     let source: DocumentSource = "filename";
+    let llmFields: Partial<ExtractedFields> | undefined;
     if (PLAIN_TEXT.test(file.name)) {
       text = await file.text();
       source = "pdftext";
@@ -89,13 +94,20 @@ export async function importFiles(files: File[], extractText?: TextExtractor): P
       if (res && res.text) {
         text = res.text;
         source = res.source;
+        llmFields = res.fields;
       }
     }
 
     if (text && text.trim().length > 15) {
-      const fields = merge(extractFields(text), fnameFields);
+      let fields = merge(extractFields(text), fnameFields);
+      if (llmFields) {
+        // LLM-proposed fields win where present (source becomes 'llm').
+        const picked = Object.fromEntries(Object.entries(llmFields).filter(([, v]) => v != null && v !== ""));
+        fields = { ...fields, ...picked, confidence: Math.max(fields.confidence, llmFields.confidence ?? 0.65) };
+        if (Object.keys(picked).length > 0) source = "llm";
+      }
       drafts.push(fieldsToDraft(fields, source, file.name, original, mime));
-      notes.push(`${file.name} → ${source === "filename" ? "filename" : "text"} extracted`);
+      notes.push(`${file.name} → ${source === "filename" ? "filename" : source === "llm" ? "AI-assisted" : "text"} extracted`);
     } else {
       // 4. Filename only.
       drafts.push(fieldsToDraft(fnameFields, "filename", file.name, original, mime));

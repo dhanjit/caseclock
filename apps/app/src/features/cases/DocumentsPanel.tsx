@@ -8,7 +8,7 @@
  * lazy-load only when an import actually runs.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CaseAggregate } from "@/domain/repository";
 import {
   DOCUMENT_SOURCE_LABEL,
@@ -16,7 +16,8 @@ import {
   type DocumentRecord,
   type DocumentSource,
 } from "@/domain/document";
-import { importFiles, type TextExtractor } from "@/domain/import";
+import { importFiles } from "@/domain/import";
+import { buildTextExtractor } from "@/lib/text-extract";
 import { useDocuments } from "@/state/documents";
 import { fmtDate } from "@/lib/format";
 import { Section, Field } from "@/features/components/bits";
@@ -38,7 +39,7 @@ function emptyManual(): DocumentDraft {
   return { source: "manual", letterNo: "", dateOnDoc: "", type: "", subject: "", direction: null };
 }
 
-export function DocumentsPanel({ agg, extractText }: { agg: CaseAggregate; extractText?: TextExtractor }) {
+export function DocumentsPanel({ agg }: { agg: CaseAggregate }) {
   const caseId = agg.case.id;
   const list = useDocuments((s) => s.byCase[caseId]) ?? [];
   const loadCase = useDocuments((s) => s.loadCase);
@@ -53,6 +54,12 @@ export function DocumentsPanel({ agg, extractText }: { agg: CaseAggregate; extra
   const [error, setError] = useState<string | null>(null);
   const [showManual, setShowManual] = useState(false);
   const [manual, setManual] = useState<DocumentDraft>(emptyManual());
+  const [ocr, setOcr] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
+
+  // Lazy text extractor — pdf.js / mammoth (+ tesseract OCR when enabled) load
+  // only when an import actually runs, never in the app shell.
+  const extractText = useMemo(() => buildTextExtractor({ ocr, onProgress: setProgress }), [ocr]);
 
   useEffect(() => {
     void loadCase(caseId);
@@ -64,6 +71,7 @@ export function DocumentsPanel({ agg, extractText }: { agg: CaseAggregate; extra
     if (files.length === 0) return;
     setBusy(true);
     setError(null);
+    setProgress(null);
     try {
       const result = await importFiles(files, extractText);
       setDrafts(result.drafts);
@@ -72,6 +80,7 @@ export function DocumentsPanel({ agg, extractText }: { agg: CaseAggregate; extra
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   }
 
@@ -128,11 +137,17 @@ export function DocumentsPanel({ agg, extractText }: { agg: CaseAggregate; extra
           <input type="file" multiple className="hidden" onChange={onPick} disabled={busy} />
         </label>
         <button onClick={() => setShowManual((v) => !v)} className={btn("ghost")}>{showManual ? "Cancel" : "Add manually"}</button>
+        <label className="flex items-center gap-1.5 text-xs text-ink-dim">
+          <input type="checkbox" checked={ocr} onChange={(e) => setOcr(e.target.checked)} />
+          OCR scanned pages
+        </label>
       </div>
       <p className="mt-1 text-[11px] text-soft">
-        Offline import — point at case files (an <code>index.csv/json</code>, named <code>date_type_ref.pdf</code>, or
-        documents). Extracted fields are <strong>drafts to confirm</strong>, never saved as verified truth.
+        Offline import — point at case files (an <code>index.csv/json</code>, named <code>date_type_ref.pdf</code>, PDFs
+        or Word docs). Reads the text layer (and OCRs scans when enabled). Extracted fields are
+        <strong> drafts to confirm</strong>, never saved as verified truth.
       </p>
+      {progress && <p className="mt-1 text-[11px] text-court">{progress}</p>}
       {error && <p className="mt-2 text-xs text-critical">{error}</p>}
 
       {/* Manual entry */}

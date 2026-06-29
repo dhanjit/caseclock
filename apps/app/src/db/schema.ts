@@ -8,7 +8,7 @@
 
 import type { Bind } from "./types";
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 /** Ordered migration steps. Index i upgrades the DB from version i to i+1. */
 export const MIGRATIONS: string[][] = [
@@ -53,6 +53,33 @@ export const MIGRATIONS: string[][] = [
        created_at INTEGER NOT NULL
      )`,
     `CREATE INDEX IF NOT EXISTS idx_attachments_case ON attachments(case_id)`,
+  ],
+  // 3 → 4 : documents (§7 connected document repository / on-demand import). Each
+  //         row is a letter / report / order with its number, date, subject and
+  //         links; `status` is draft until the officer confirms an extracted entry
+  //         (never verified truth). Originals (if attached) live in the sidecar
+  //         (blob_ref); index-only pointers have none.
+  [
+    `CREATE TABLE IF NOT EXISTS documents (
+       id                 TEXT PRIMARY KEY,
+       case_id            TEXT NOT NULL,
+       letter_no          TEXT,
+       date_on_doc        TEXT,
+       type               TEXT,
+       subject            TEXT,
+       direction          TEXT,
+       forwarding_date    TEXT,
+       status             TEXT NOT NULL,
+       source             TEXT NOT NULL,
+       confidence         REAL,
+       linked_accused_id  TEXT,
+       linked_evidence_id TEXT,
+       file_name          TEXT,
+       mime               TEXT,
+       blob_ref           TEXT,
+       created_at         INTEGER NOT NULL
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_documents_case ON documents(case_id)`,
   ],
 ];
 

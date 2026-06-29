@@ -55,6 +55,16 @@ export class MemoryDbClient implements DbClient {
     return this.requireDb().selectObjects(sql, bind) as T[];
   }
 
+  // No vault/crypto in the memory client — blobs pass through as copies so callers
+  // can't accidentally mutate the stored buffer (mirrors the encrypt/decrypt contract).
+  async encryptBlob(bytes: Uint8Array): Promise<Uint8Array> {
+    return bytes.slice();
+  }
+
+  async decryptBlob(blob: Uint8Array): Promise<Uint8Array> {
+    return blob.slice();
+  }
+
   async exportBytes(): Promise<Uint8Array> {
     return exportDb(this.requireDb());
   }

@@ -8,7 +8,7 @@
 
 import type { Bind } from "./types";
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /** Ordered migration steps. Index i upgrades the DB from version i to i+1. */
 export const MIGRATIONS: string[][] = [
@@ -35,6 +35,24 @@ export const MIGRATIONS: string[][] = [
        updated_at INTEGER NOT NULL
      )`,
     `CREATE INDEX IF NOT EXISTS idx_cases_updated ON cases(updated_at DESC)`,
+  ],
+  // 2 → 3 : attachments (§10 gallery + mind map). Thumbnails live in-vault as a
+  //         BLOB (small, fast, backed up); full originals live in the encrypted
+  //         OPFS sidecar referenced by blob_ref (see db/blob-store.ts). kind ∈
+  //         accused|place|evidence|doc|other; ref_id links to the person/evidence/doc.
+  [
+    `CREATE TABLE IF NOT EXISTS attachments (
+       id         TEXT PRIMARY KEY,
+       case_id    TEXT NOT NULL,
+       kind       TEXT NOT NULL,
+       ref_id     TEXT,
+       mime       TEXT NOT NULL,
+       caption    TEXT,
+       thumb      BLOB NOT NULL,
+       blob_ref   TEXT NOT NULL,
+       created_at INTEGER NOT NULL
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_attachments_case ON attachments(case_id)`,
   ],
 ];
 

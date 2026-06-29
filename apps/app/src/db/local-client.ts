@@ -145,6 +145,27 @@ export class LocalDbClient implements DbClient {
     return this.requireDb().selectObjects(sql, bind) as T[];
   }
 
+  async encryptBlob(bytes: Uint8Array): Promise<Uint8Array> {
+    if (!this.session) throw new Error("Vault is locked.");
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = new Uint8Array(
+      await crypto.subtle.encrypt({ name: "AES-GCM", iv }, this.session.dekKey, bytes),
+    );
+    const out = new Uint8Array(12 + ct.length);
+    out.set(iv, 0);
+    out.set(ct, 12);
+    return out;
+  }
+
+  async decryptBlob(blob: Uint8Array): Promise<Uint8Array> {
+    if (!this.session) throw new Error("Vault is locked.");
+    const iv = blob.subarray(0, 12);
+    const ct = blob.subarray(12);
+    return new Uint8Array(
+      await crypto.subtle.decrypt({ name: "AES-GCM", iv }, this.session.dekKey, ct),
+    );
+  }
+
   async exportBytes(): Promise<Uint8Array> {
     return exportDb(this.requireDb());
   }

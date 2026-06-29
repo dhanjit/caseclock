@@ -40,6 +40,14 @@ export interface DbClient {
   execMany(statements: SqlStatement[]): Promise<void>;
   /** Read query. */
   query<T extends DbRow = DbRow>(sql: string, bind?: Bind): Promise<T[]>;
+  /**
+   * Encrypt arbitrary bytes with the vault DEK (AES-256-GCM, random IV prepended)
+   * for the sidecar BlobStore. Throws when locked. MemoryDbClient passes through
+   * unencrypted (test path).
+   */
+  encryptBlob(bytes: Uint8Array): Promise<Uint8Array>;
+  /** Reverse of encryptBlob. */
+  decryptBlob(blob: Uint8Array): Promise<Uint8Array>;
   /** Raw serialized DB bytes (for encrypted backup export). */
   exportBytes(): Promise<Uint8Array>;
   /** Replace the live DB with imported bytes, migrate, and persist (restore). */

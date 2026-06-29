@@ -189,3 +189,46 @@ export async function loadVaultFromOpfs(name: string): Promise<Uint8Array | null
   // Primary, then the .bak generation (recovers from a crash between writes).
   return (await readEntry(name)) ?? (await readEntry(`${name}.bak`));
 }
+
+// ---------------------------------------------------------------------------
+// Sidecar blob storage (§10/§7). Big binaries (encrypted image/document
+// originals) live in an OPFS `blobs/` subdir, content-addressed by name, OUTSIDE
+// the SQLite vault — so the per-write whole-vault reseal never scales with image
+// bytes. Each blob is already AES-256-GCM ciphertext (BlobStore encrypts with the
+// vault DEK); these helpers only move opaque bytes.
+// ---------------------------------------------------------------------------
+
+const BLOB_DIR = "blobs";
+
+async function blobDir(create: boolean): Promise<FileSystemDirectoryHandle | null> {
+  if (!opfsAvailable()) return null;
+  const root = await navigator.storage.getDirectory();
+  try {
+    return await root.getDirectoryHandle(BLOB_DIR, { create });
+  } catch {
+    return null;
+  }
+}
+
+export async function writeOpfsBlob(name: string, bytes: Uint8Array): Promise<void> {
+  const dir = await blobDir(true);
+  if (!dir) throw new Error("On-device blob storage (OPFS) is unavailable in this browser/mode.");
+  await writeOpfsFile(dir, name, bytes);
+}
+
+export async function readOpfsBlob(name: string): Promise<Uint8Array | null> {
+  const dir = await blobDir(false);
+  if (!dir) return null;
+  try {
+    const fh = await dir.getFileHandle(name, { create: false });
+    return new Uint8Array(await (await fh.getFile()).arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteOpfsBlob(name: string): Promise<void> {
+  const dir = await blobDir(false);
+  if (!dir) return;
+  await dir.removeEntry(name).catch(() => {});
+}

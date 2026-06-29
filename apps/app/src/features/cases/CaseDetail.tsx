@@ -29,6 +29,7 @@ import { RequestsPanel } from "./RequestsPanel";
 import { SanctionsPanel } from "./SanctionsPanel";
 import { PlacePanel } from "./PlacePanel";
 import { ReferenceLawsPanel } from "./ReferenceLawsPanel";
+import { GalleryPanel } from "./GalleryPanel";
 import { BriefingNote } from "./BriefingNote";
 import { buildCaseIcs } from "@/domain/ics";
 
@@ -275,6 +276,7 @@ export function CaseDetail({ id }: { id: string }) {
       <RequestsPanel agg={agg} onSaveRequests={saveRequests} />
       <SanctionsPanel agg={agg} onSaveCase={saveCase} />
       <PlacePanel agg={agg} onSaveCase={saveCase} />
+      <GalleryPanel agg={agg} />
       <ReferenceLawsPanel />
 
       {/* Timeline */}

@@ -9,6 +9,7 @@
 
 import type { DbClient } from "@/db/types";
 import { BlobStore } from "@/db/blob-store";
+import { blobRefCount } from "@/db/blob-refs";
 import { newId } from "@/lib/id";
 
 /** Where a document's fields came from (drives the confidence/draft treatment). */
@@ -201,14 +202,9 @@ export class DocumentRepository {
       [id],
     );
     await this.client.exec("DELETE FROM documents WHERE id = ?", [id]);
+    // GC only when NO table (documents OR attachments) still references the blob.
     const ref = rows[0]?.blob_ref;
-    if (ref) {
-      const others = await this.client.query<{ n: number }>(
-        "SELECT COUNT(*) AS n FROM documents WHERE blob_ref = ?",
-        [ref],
-      );
-      if ((others[0]?.n ?? 0) === 0) await this.blobs.remove(ref);
-    }
+    if (ref && (await blobRefCount(this.client, ref)) === 0) await this.blobs.remove(ref);
   }
 
   async getOriginal(blobRef: string): Promise<Uint8Array | null> {

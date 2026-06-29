@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { DocumentRepository, type DocumentDraft } from "./document";
+import { AttachmentRepository } from "./attachment";
+import { CaseRepository } from "./repository";
 import { BlobStore, type BlobBackend } from "@/db/blob-store";
 import { MemoryDbClient } from "@/db/memory-client";
 
@@ -77,5 +79,58 @@ describe("DocumentRepository (§7)", () => {
     await repo.remove(d2.id);
     expect(await repo.listForCase("c1")).toHaveLength(0);
     expect(await repo.getOriginal(d.blobRef!)).toBeNull();
+  });
+});
+
+describe("cross-table sidecar GC (attachments ⇄ documents share one blob store)", () => {
+  let client: MemoryDbClient;
+  let backend: BlobBackend;
+  let docs: DocumentRepository;
+  let atts: AttachmentRepository;
+  const SAME = new Uint8Array([42, 42, 42, 42]);
+
+  beforeEach(async () => {
+    client = new MemoryDbClient();
+    await client.createVault("x");
+    backend = memBackend();
+    docs = new DocumentRepository(client, new BlobStore(client, backend));
+    atts = new AttachmentRepository(client, new BlobStore(client, backend));
+  });
+
+  it("deleting an attachment does NOT delete an original a document still references", async () => {
+    // Same bytes imported as both a gallery image and a document → one shared blobRef.
+    await atts.addMany([{ caseId: "c1", kind: "evidence", mime: "image/jpeg", thumb: new Uint8Array([1]), original: SAME }]);
+    await docs.addConfirmed("c1", [draft({ original: SAME, fileName: "scan.jpg", mime: "image/jpeg" })]);
+    const [a] = await atts.listForCase("c1");
+    const [d] = await docs.listForCase("c1");
+    expect(a.blobRef).toBe(d.blobRef); // deduped to one sidecar file
+
+    await atts.remove(a.id);
+    // The document still points at the shared original — it must survive.
+    expect(await docs.getOriginal(d.blobRef!)).not.toBeNull();
+
+    // Now remove the last referencing row → the sidecar is finally GC'd.
+    await docs.remove(d.id);
+    expect(await docs.getOriginal(d.blobRef!)).toBeNull();
+  });
+
+  it("CaseRepository.remove purges child rows AND GCs their sidecar originals", async () => {
+    const cases = new CaseRepository(client, new BlobStore(client, backend));
+    await cases.save({
+      case: { id: "cX", firNumber: "1/26", firDate: "2026-01-01", uapaFlag: false, status: "investigation" } as never,
+      persons: [], hearings: [], supervisionEntries: [], tasks: [],
+    });
+    await atts.addMany([{ caseId: "cX", kind: "evidence", mime: "image/jpeg", thumb: new Uint8Array([1]), original: new Uint8Array([7, 7]) }]);
+    await docs.addConfirmed("cX", [draft({ original: new Uint8Array([8, 8]), mime: "application/pdf" })]);
+    const [a] = await atts.listForCase("cX");
+    const [d] = await docs.listForCase("cX");
+
+    await cases.remove("cX");
+
+    expect(await atts.listForCase("cX")).toHaveLength(0);
+    expect(await docs.listForCase("cX")).toHaveLength(0);
+    // Both sidecar originals are reclaimed — nothing left on device for a deleted case.
+    expect(await atts.getOriginal(a.blobRef)).toBeNull();
+    expect(await docs.getOriginal(d.blobRef!)).toBeNull();
   });
 });

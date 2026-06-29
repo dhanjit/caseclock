@@ -18,6 +18,7 @@ import {
 } from "@/domain/document";
 import { importFiles } from "@/domain/import";
 import { buildTextExtractor } from "@/lib/text-extract";
+import { ocrConfigured } from "@/lib/ocr";
 import { llmAvailable } from "@/lib/llm";
 import { useDocuments } from "@/state/documents";
 import { fmtDate } from "@/lib/format";
@@ -59,6 +60,7 @@ export function DocumentsPanel({ agg }: { agg: CaseAggregate }) {
   const [llm, setLlm] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
   const aiAvailable = useMemo(() => llmAvailable(), []);
+  const ocrAvailable = useMemo(() => ocrConfigured(), []);
 
   // Lazy text extractor — pdf.js / mammoth (+ tesseract OCR / web-llm when enabled)
   // load only when an import actually runs, never in the app shell.
@@ -127,8 +129,15 @@ export function DocumentsPanel({ agg }: { agg: CaseAggregate }) {
       setError("Original not on this device (sidecar files aren't in the backup).");
       return;
     }
-    const url = URL.createObjectURL(new Blob([bytes.slice()], { type: d.mime ?? "application/octet-stream" }));
-    window.open(url, "_blank");
+    // Force a non-executable type for html/svg/xml so an imported case file can't
+    // run script in the app origin (same-origin OPFS/vault access); open with
+    // noopener to prevent tab-nabbing.
+    const raw = d.mime ?? "application/octet-stream";
+    const safeMime = /^(text\/html|image\/svg|application\/(xhtml|xml)|text\/xml)/i.test(raw)
+      ? "application/octet-stream"
+      : raw;
+    const url = URL.createObjectURL(new Blob([bytes.slice()], { type: safeMime }));
+    window.open(url, "_blank", "noopener,noreferrer");
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
 
@@ -140,10 +149,12 @@ export function DocumentsPanel({ agg }: { agg: CaseAggregate }) {
           <input type="file" multiple className="hidden" onChange={onPick} disabled={busy} />
         </label>
         <button onClick={() => setShowManual((v) => !v)} className={btn("ghost")}>{showManual ? "Cancel" : "Add manually"}</button>
-        <label className="flex items-center gap-1.5 text-xs text-ink-dim">
-          <input type="checkbox" checked={ocr} onChange={(e) => setOcr(e.target.checked)} />
-          OCR scanned pages
-        </label>
+        {ocrAvailable && (
+          <label className="flex items-center gap-1.5 text-xs text-ink-dim">
+            <input type="checkbox" checked={ocr} onChange={(e) => setOcr(e.target.checked)} />
+            OCR scanned pages
+          </label>
+        )}
         {aiAvailable && (
           <label className="flex items-center gap-1.5 text-xs text-ink-dim" title="Reads documents with an on-device model (one-time download, ~1GB). Fully offline. Drafts only.">
             <input type="checkbox" checked={llm} onChange={(e) => setLlm(e.target.checked)} />

@@ -108,7 +108,12 @@ export function GalleryPanel({ agg }: { agg: CaseAggregate }) {
         setError("The full-resolution original isn't on this device (sidecar files aren't in the backup).");
         return;
       }
-      setLightbox({ url: blobUrl(bytes, a.mime), caption: a.caption ?? "" });
+      const url = blobUrl(bytes, a.mime);
+      // Revoke any prior lightbox URL when replacing it (guards a rapid double-open).
+      setLightbox((prev) => {
+        if (prev) URL.revokeObjectURL(prev.url);
+        return { url, caption: a.caption ?? "" };
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }

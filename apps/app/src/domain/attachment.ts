@@ -10,6 +10,7 @@
 
 import type { DbClient } from "@/db/types";
 import { BlobStore } from "@/db/blob-store";
+import { blobRefCount } from "@/db/blob-refs";
 import { newId } from "@/lib/id";
 
 export type AttachmentKind = "accused" | "place" | "evidence" | "doc" | "other";
@@ -129,13 +130,10 @@ export class AttachmentRepository {
       [id],
     );
     await this.client.exec("DELETE FROM attachments WHERE id = ?", [id]);
-    // GC the sidecar original only when no other attachment references it (dedup).
-    if (rows.length) {
-      const others = await this.client.query<{ n: number }>(
-        "SELECT COUNT(*) AS n FROM attachments WHERE blob_ref = ?",
-        [rows[0].blob_ref],
-      );
-      if ((others[0]?.n ?? 0) === 0) await this.blobs.remove(rows[0].blob_ref);
+    // GC the sidecar original only when NO table (attachments OR documents) still
+    // references it — the store is content-addressed + shared across both.
+    if (rows.length && (await blobRefCount(this.client, rows[0].blob_ref)) === 0) {
+      await this.blobs.remove(rows[0].blob_ref);
     }
   }
 

@@ -39,7 +39,8 @@ export function normalizeDate(input: string): string | null {
   m = s.match(/\b(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2,4})\b/); // dd/mm/yyyy (day-first)
   if (m) {
     let y = +m[3];
-    if (y < 100) y += 2000;
+    // 2-digit year: sliding pivot so 1990s docs don't become 2090s. 70-99 → 19xx.
+    if (y < 100) y += y >= 70 ? 1900 : 2000;
     return iso(y, +m[2], +m[1]);
   }
   m = s.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})\b/); // 5 Jan 2026
@@ -230,7 +231,7 @@ function splitCsvLine(line: string): string[] {
           i++;
         } else inQuotes = false;
       } else cur += ch;
-    } else if (ch === '"') inQuotes = true;
+    } else if (ch === '"' && cur === "") inQuotes = true; // a quote is significant only at field start (RFC-4180)
     else if (ch === ",") {
       out.push(cur);
       cur = "";

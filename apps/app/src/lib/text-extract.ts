@@ -3,9 +3,14 @@
  * TextExtractor (file → text) that the DocumentsPanel injects into importFiles.
  *
  * Heavy deps are dynamic-imported INSIDE the call, so pdf.js / mammoth / tesseract
- * never enter the app shell — they load only when an import actually runs. All
- * assets are self-hosted (Vite bundles them same-origin), so the CSP
- * `connect-src 'self'` / no-egress posture holds. Every result is a DRAFT.
+ * never enter the app shell — they load only when an import actually runs.
+ *
+ * NO-EGRESS: pdf.js (worker bundled via import.meta.url) and mammoth (pure JS) are
+ * genuinely self-hosted same-origin. OCR (tesseract) and the LLM (web-llm) are NOT
+ * bundled — they enforce no-egress in their own modules (lib/ocr.ts, lib/llm.ts):
+ * enabled only when their assets are self-hosted, otherwise refused (no CDN). Do
+ * not rely on the browser CSP as the guarantee — it's absent in the native WebView
+ * and dev server. Every result is a DRAFT for the officer to confirm.
  */
 
 import type { TextExtractor } from "@/domain/import";

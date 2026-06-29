@@ -48,11 +48,16 @@ async function encodeScaled(
 async function decodeViaImg(file: Blob): Promise<{ src: HTMLImageElement; sw: number; sh: number; revoke: () => void }> {
   const url = URL.createObjectURL(file);
   const img = new Image();
-  await new Promise<void>((resolve, reject) => {
-    img.onload = () => resolve();
-    img.onerror = () => reject(new Error("Could not decode this image (unsupported format?)."));
-    img.src = url;
-  });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("Could not decode this image (unsupported format?)."));
+      img.src = url;
+    });
+  } catch (e) {
+    URL.revokeObjectURL(url); // don't leak the object URL on the (common) decode-failure path
+    throw e;
+  }
   return { src: img, sw: img.naturalWidth, sh: img.naturalHeight, revoke: () => URL.revokeObjectURL(url) };
 }
 

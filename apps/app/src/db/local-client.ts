@@ -37,17 +37,17 @@ import {
   type KdfParams,
 } from "@/crypto/envelope";
 import { applyMigrations } from "./schema";
-import type { Bind, DbClient, DbRow } from "./types";
+import type { Bind, DbClient, DbRow, SqlStatement } from "./types";
 
 const VAULT_FILE = "caseclock.vault";
 
 /** A MigrationIO bound to a specific Database (runs migrations without touching the live persist path). */
 function dbIO(db: Database) {
   return {
-    exec: async (sql: string, bind: (string | number | null)[] = []) => {
+    exec: async (sql: string, bind: Bind = []) => {
       db.exec({ sql, bind });
     },
-    query: async <T extends Record<string, unknown>>(sql: string, bind: (string | number | null)[] = []) =>
+    query: async <T extends Record<string, unknown>>(sql: string, bind: Bind = []) =>
       db.selectObjects(sql, bind) as T[],
   };
 }
@@ -121,9 +121,49 @@ export class LocalDbClient implements DbClient {
     });
   }
 
+  async execMany(statements: SqlStatement[]): Promise<void> {
+    if (statements.length === 0) return;
+    await this.serialize(async () => {
+      const db = this.requireDb();
+      // One transaction → one whole-vault reseal for the whole batch (avoids the
+      // O(N · dbSize) cost of N separate exec()s on a large encrypted vault).
+      db.exec({ sql: "SAVEPOINT execmany" });
+      try {
+        for (const s of statements) db.exec({ sql: s.sql, bind: s.bind ?? [] });
+        db.exec({ sql: "RELEASE execmany" });
+      } catch (e) {
+        db.exec({ sql: "ROLLBACK TO execmany" });
+        db.exec({ sql: "RELEASE execmany" });
+        throw e; // batch is atomic — nothing persisted on failure
+      }
+      await this.persist();
+    });
+  }
+
   async query<T extends DbRow = DbRow>(sql: string, bind: Bind = []): Promise<T[]> {
     // Reads are synchronous within one event-loop tick — no serialization needed.
     return this.requireDb().selectObjects(sql, bind) as T[];
+  }
+
+  async encryptBlob(bytes: Uint8Array): Promise<Uint8Array> {
+    if (!this.session) throw new Error("Vault is locked.");
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = new Uint8Array(
+      await crypto.subtle.encrypt({ name: "AES-GCM", iv }, this.session.dekKey, bytes),
+    );
+    const out = new Uint8Array(12 + ct.length);
+    out.set(iv, 0);
+    out.set(ct, 12);
+    return out;
+  }
+
+  async decryptBlob(blob: Uint8Array): Promise<Uint8Array> {
+    if (!this.session) throw new Error("Vault is locked.");
+    const iv = blob.subarray(0, 12);
+    const ct = blob.subarray(12);
+    return new Uint8Array(
+      await crypto.subtle.decrypt({ name: "AES-GCM", iv }, this.session.dekKey, ct),
+    );
   }
 
   async exportBytes(): Promise<Uint8Array> {

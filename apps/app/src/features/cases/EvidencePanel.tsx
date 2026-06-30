@@ -4,20 +4,18 @@
 import { useState } from "react";
 import type { CaseAggregate } from "@/domain/repository";
 import type { EvidenceRecord } from "@/domain/types";
-import { addDays, diffDays, todayISO, type ISODate } from "@/rules/dates";
+import { todayISO } from "@/rules/dates";
 import { newId } from "@/lib/id";
 import { fmtDate } from "@/lib/format";
 import { Section } from "@/features/components/bits";
 import { Highlighted } from "@/features/components/Highlighted";
 import { btn } from "@/features/components/TopBar";
+// Re-exported so existing `import { expertReportOverdue } from "./EvidencePanel"`
+// callers (e.g. CaseFile.tsx) keep working after the pure helper moved to domain.
+import { expertReportOverdue } from "@/domain/evidence";
+export { expertReportOverdue };
 
 const input = "rounded-xl border border-line bg-surface-2 px-3 py-2 text-sm text-ink outline-none focus:border-court";
-
-/** §4.1: an expert report pending beyond 2 days from forwarding is overdue (RED). */
-export function expertReportOverdue(e: EvidenceRecord, today: ISODate): boolean {
-  if (e.reportKind !== "expert" || !e.forwardedDate || e.status === "received") return false;
-  return diffDays(today, addDays(e.forwardedDate, 2)) >= 0;
-}
 
 export function EvidencePanel({
   agg,

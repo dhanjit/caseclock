@@ -9,44 +9,17 @@
 import { useState } from "react";
 import type { CaseAggregate } from "@/domain/repository";
 import {
-  processRequestLabel,
   uapaSectionWithoutFlag,
   type CaseRecord,
-  type PersonRecord,
-  type ProcessRequestRecord,
 } from "@/domain/types";
 import { accusedStatusMeta } from "@/domain/accused";
+import { custodySummary, accusedNotices } from "@/domain/case-rollups";
 import { todayISO } from "@/rules/dates";
 import { fmtDate } from "@/lib/format";
 import { Section, Field } from "@/features/components/bits";
 import { Highlighted } from "@/features/components/Highlighted";
 import { btn } from "@/features/components/TopBar";
 import { expertReportOverdue } from "./EvidencePanel";
-
-const CUSTODY_KIND_LABEL: Record<string, string> = { police: "PC", judicial: "JC", other: "custody" };
-
-/** Heading 12 (§3) — compact previous-custody summary from PersonRecord.custodyHistory. */
-function custodySummary(p: PersonRecord): string {
-  return (p.custodyHistory ?? [])
-    .map((h) => {
-      const kind = CUSTODY_KIND_LABEL[h.kind ?? "other"] ?? "custody";
-      if (h.from && h.to) return `${kind} ${fmtDate(h.from)}–${fmtDate(h.to)}`;
-      if (h.from) return `${kind} since ${fmtDate(h.from)}`;
-      return kind;
-    })
-    .join(" · ");
-}
-
-/** Heading 12 — the per-accused LOC/Interpol view, merged from BOTH sources so nothing
- * is orphaned: the §6 Process & Requests tracker (Decision #1: authoritative) AND the
- * per-accused LocNotice field still editable in AccusedPanel. */
-function accusedNotices(p: PersonRecord, requests: ProcessRequestRecord[]): string {
-  const fromTracker = requests
-    .filter((r) => r.accusedIds.includes(p.id) && (r.type === "LOC" || r.type === "interpol_red" || r.type === "interpol_blue"))
-    .map((r) => `${processRequestLabel(r)}${r.refNo ? ` (${r.refNo})` : ""}`);
-  const fromLoc = (p.loc ?? []).map((l) => `${l.type}${l.ref ? ` (${l.ref})` : ""}`);
-  return [...fromTracker, ...fromLoc].join(" · ");
-}
 
 const input = "w-full rounded-xl border border-line bg-surface-2 px-3 py-2 text-sm text-ink outline-none focus:border-court";
 

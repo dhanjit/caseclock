@@ -6,7 +6,9 @@
  * is keyed on meta.schema_version so adding tables is purely additive.
  */
 
-export const SCHEMA_VERSION = 2;
+import type { Bind } from "./types";
+
+export const SCHEMA_VERSION = 4;
 
 /** Ordered migration steps. Index i upgrades the DB from version i to i+1. */
 export const MIGRATIONS: string[][] = [
@@ -34,6 +36,51 @@ export const MIGRATIONS: string[][] = [
      )`,
     `CREATE INDEX IF NOT EXISTS idx_cases_updated ON cases(updated_at DESC)`,
   ],
+  // 2 → 3 : attachments (§10 gallery + mind map). Thumbnails live in-vault as a
+  //         BLOB (small, fast, backed up); full originals live in the encrypted
+  //         OPFS sidecar referenced by blob_ref (see db/blob-store.ts). kind ∈
+  //         accused|place|evidence|doc|other; ref_id links to the person/evidence/doc.
+  [
+    `CREATE TABLE IF NOT EXISTS attachments (
+       id         TEXT PRIMARY KEY,
+       case_id    TEXT NOT NULL,
+       kind       TEXT NOT NULL,
+       ref_id     TEXT,
+       mime       TEXT NOT NULL,
+       caption    TEXT,
+       thumb      BLOB NOT NULL,
+       blob_ref   TEXT NOT NULL,
+       created_at INTEGER NOT NULL
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_attachments_case ON attachments(case_id)`,
+  ],
+  // 3 → 4 : documents (§7 connected document repository / on-demand import). Each
+  //         row is a letter / report / order with its number, date, subject and
+  //         links; `status` is draft until the officer confirms an extracted entry
+  //         (never verified truth). Originals (if attached) live in the sidecar
+  //         (blob_ref); index-only pointers have none.
+  [
+    `CREATE TABLE IF NOT EXISTS documents (
+       id                 TEXT PRIMARY KEY,
+       case_id            TEXT NOT NULL,
+       letter_no          TEXT,
+       date_on_doc        TEXT,
+       type               TEXT,
+       subject            TEXT,
+       direction          TEXT,
+       forwarding_date    TEXT,
+       status             TEXT NOT NULL,
+       source             TEXT NOT NULL,
+       confidence         REAL,
+       linked_accused_id  TEXT,
+       linked_evidence_id TEXT,
+       file_name          TEXT,
+       mime               TEXT,
+       blob_ref           TEXT,
+       created_at         INTEGER NOT NULL
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_documents_case ON documents(case_id)`,
+  ],
 ];
 
 /** SQL to bring a freshly-created DB up to SCHEMA_VERSION. */
@@ -42,8 +89,8 @@ export function bootstrapSql(): string[] {
 }
 
 interface MigrationIO {
-  exec: (sql: string, bind?: (string | number | null)[]) => Promise<void>;
-  query: <T extends Record<string, unknown>>(sql: string, bind?: (string | number | null)[]) => Promise<T[]>;
+  exec: (sql: string, bind?: Bind) => Promise<void>;
+  query: <T extends Record<string, unknown>>(sql: string, bind?: Bind) => Promise<T[]>;
 }
 
 /**

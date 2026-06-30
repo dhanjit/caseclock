@@ -76,3 +76,124 @@ body {
     font-size: 16px;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Briefing note (§8) — printable A4 view.
+   The note mounts into #print-root (a sibling of #root) via a React portal.
+   - Default: #print-root is hidden.
+   - On screen while a note is open (body.print-active): show it as a full-screen
+     white overlay so it's reviewable AND the "Close" button works even when the
+     print dialog's `afterprint` never fires (iPad Safari / WKWebView).
+   - @media print: hide the dark SPA, render only the note as black-on-white A4.
+   --------------------------------------------------------------------------- */
+#print-root {
+  display: none;
+}
+
+body.print-active #print-root {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: #fff;
+  color: #000;
+  padding: 24px;
+}
+
+.briefing-note {
+  color: #000;
+  background: #fff;
+  font: 12pt/1.45 ui-serif, Georgia, "Times New Roman", serif;
+  max-width: 190mm;
+  margin: 0 auto;
+}
+
+.briefing-note h1 {
+  font-size: 18pt;
+  margin: 0 0 4pt;
+}
+
+.briefing-note .briefing-case-label {
+  font-size: 13pt;
+  font-weight: 600;
+  margin: 0 0 10pt;
+}
+
+.briefing-note .briefing-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2pt 16pt;
+  margin: 0 0 14pt;
+  padding: 0 0 10pt;
+  border-bottom: 1px solid #000;
+}
+
+.briefing-note .briefing-meta dt {
+  font-size: 8pt;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #444;
+}
+
+.briefing-note .briefing-meta dd {
+  margin: 0 0 4pt;
+  font-size: 11pt;
+}
+
+.briefing-note .briefing-heading {
+  break-inside: avoid;
+  page-break-inside: avoid;
+  margin: 0 0 9pt;
+}
+
+.briefing-note .briefing-heading h2 {
+  font-size: 11pt;
+  border-bottom: 0.5px solid #999;
+  padding-bottom: 2pt;
+  margin: 0 0 3pt;
+}
+
+.briefing-note .briefing-heading ul {
+  margin: 0;
+  padding-left: 16pt;
+}
+
+.briefing-note .briefing-heading li {
+  margin: 0 0 1pt;
+  white-space: pre-wrap;
+}
+
+.briefing-close {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 1001;
+  border: 1px solid #888;
+  border-radius: 8px;
+  background: #f4f4f5;
+  color: #111;
+  padding: 6px 14px;
+  font: 600 14px/1 ui-sans-serif, system-ui, sans-serif;
+  cursor: pointer;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 18mm;
+  }
+  body.print-active #root {
+    display: none !important;
+  }
+  body.print-active #print-root {
+    position: static;
+    overflow: visible;
+    padding: 0;
+    background: #fff;
+  }
+  [data-print-hide] {
+    display: none !important;
+  }
+}

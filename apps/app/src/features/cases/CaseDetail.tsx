@@ -29,8 +29,24 @@ import { RequestsPanel } from "./RequestsPanel";
 import { SanctionsPanel } from "./SanctionsPanel";
 import { PlacePanel } from "./PlacePanel";
 import { ReferenceLawsPanel } from "./ReferenceLawsPanel";
+import { GalleryPanel } from "./GalleryPanel";
+import { DocumentsPanel } from "./DocumentsPanel";
+import { BriefingNote } from "./BriefingNote";
+import { buildCaseIcs } from "@/domain/ics";
 
 const input = "w-full rounded-xl border border-line bg-surface-2 px-3 py-2 text-sm text-ink outline-none focus:border-court";
+
+/** Trigger a client-side file download (reused for the per-case .ics export). */
+function downloadFile(filename: string, content: string, mime: string) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  // Defer revoke so it can't race the download start on some browsers.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
 
 export function CaseDetail({ id }: { id: string }) {
   const agg = useCases((s) => s.getById(id));
@@ -47,6 +63,7 @@ export function CaseDetail({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
   const [priorityWarn, setPriorityWarn] = useState<string | null>(null);
+  const [printing, setPrinting] = useState(false);
 
   const deadlines = useMemo(
     () =>
@@ -137,6 +154,12 @@ export function CaseDetail({ id }: { id: string }) {
     const { priorityCount, overCap } = await setPriority(id, !agg.case.priority);
     setPriorityWarn(overCap ? `${priorityCount} cases are flagged priority — the recommended cap is ~10. Consider demoting a quieter one.` : null);
   }
+  function exportCaseIcs() {
+    if (!agg) return;
+    const ics = buildCaseIcs(agg, DEFAULT_SETTINGS, today);
+    const safe = c.firNumber.replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "case";
+    downloadFile(`caseclock-${safe}.ics`, ics, "text/calendar;charset=utf-8");
+  }
 
   return (
     <div className="mx-auto flex min-h-full max-w-3xl flex-col px-4 pb-24 pt-5">
@@ -153,6 +176,15 @@ export function CaseDetail({ id }: { id: string }) {
             >
               {c.priority ? "★ Priority" : "☆ Priority"}
             </button>
+            <button onClick={() => setPrinting(true)} title="Printable A4 briefing note" className={btn("ghost")}>
+              Briefing note
+            </button>
+            <button onClick={exportCaseIcs} title="Export this case's deadlines as .ics" className={btn("ghost")}>
+              Export .ics
+            </button>
+            <button onClick={() => go({ kind: "mindmap", id })} title="Per-case mind map" className={btn("ghost")}>
+              Mind map
+            </button>
             <button onClick={() => go({ kind: "dashboard" })} className={btn("ghost")}>
               Back
             </button>
@@ -165,6 +197,7 @@ export function CaseDetail({ id }: { id: string }) {
       {priorityWarn && (
         <p className="mt-2 rounded-lg border border-statutory/40 bg-statutory/10 px-3 py-2 text-xs text-statutory">⚠ {priorityWarn}</p>
       )}
+      {printing && <BriefingNote agg={agg} onDone={() => setPrinting(false)} />}
 
       {/* Context-restore header */}
       {(gapDays >= 3 || latest) && (
@@ -247,6 +280,8 @@ export function CaseDetail({ id }: { id: string }) {
       <RequestsPanel agg={agg} onSaveRequests={saveRequests} />
       <SanctionsPanel agg={agg} onSaveCase={saveCase} />
       <PlacePanel agg={agg} onSaveCase={saveCase} />
+      <GalleryPanel agg={agg} />
+      <DocumentsPanel agg={agg} />
       <ReferenceLawsPanel />
 
       {/* Timeline */}

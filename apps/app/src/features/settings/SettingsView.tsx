@@ -12,6 +12,8 @@ import { estimateStrength } from "@/lib/passphrase";
 import { fmtDate } from "@/lib/format";
 import { Section, Field } from "@/features/components/bits";
 import { TopBar, btn } from "@/features/components/TopBar";
+import { isNativePlatform } from "@/lib/platform";
+import { scheduleTestAlarm } from "@/notify/notification-sink";
 
 const input = "w-full rounded-xl border border-line bg-surface-2 px-3 py-2 text-sm text-ink outline-none focus:border-court";
 
@@ -195,6 +197,8 @@ export function SettingsView() {
 
         <DemoData />
 
+        <NotificationDiagnostics />
+
         <Section title="Security">
           <ul className="space-y-1.5 text-xs text-ink-dim">
             <li>• All data is encrypted on this device (AES-256-GCM, Argon2id). No cloud, no servers, no telemetry.</li>
@@ -238,6 +242,47 @@ function CalendarExport() {
       <button onClick={doExportIcs} disabled={busy || aggregates.length === 0} className={`${btn("primary")} disabled:opacity-40`}>
         {busy ? "Building…" : "Export deadlines (.ics)"}
       </button>
+    </Section>
+  );
+}
+
+/**
+ * On-device gate test (native only): schedule a one-off alarm 60s out, so you can
+ * background the app and confirm a notification fires while it is CLOSED — the M8
+ * proof that going native actually delivers the deadline alarms. Hidden on web.
+ */
+function NotificationDiagnostics() {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  if (!isNativePlatform()) return null;
+
+  async function fire() {
+    setBusy(true);
+    setMsg(null);
+    setErr(null);
+    try {
+      const at = await scheduleTestAlarm(60);
+      setMsg(`Scheduled for ${at.toLocaleTimeString()} (~60s). Now CLOSE the app and wait — it should ring.`);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Section title="Notification test (on-device gate)">
+      <p className="mb-3 text-xs text-ink-dim">
+        Schedules a one-off alarm ~60 seconds from now. Tap it, then <strong>fully close CaseClock</strong> and
+        wait — if the notification fires with the app closed, closed-app deadline alarms work. Dev-only; not shown on web.
+      </p>
+      <button onClick={fire} disabled={busy} className={`${btn("primary")} disabled:opacity-40`}>
+        {busy ? "Scheduling…" : "Fire test alarm in 60s"}
+      </button>
+      {msg && <p className="mt-2 text-xs text-ok">{msg}</p>}
+      {err && <p className="mt-2 text-xs text-critical">{err}</p>}
     </Section>
   );
 }

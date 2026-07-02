@@ -19,9 +19,11 @@ import { useNav } from "@/state/nav";
 import { useCases } from "@/state/cases";
 import { useWatchlist } from "@/state/watchlist";
 import { useAutoLock } from "@/features/lock/useAutoLock";
+import { useNotificationSync } from "@/notify";
 
 function Shell() {
   useAutoLock();
+  useNotificationSync(); // M8: keep OS deadline alarms in sync with the caseload
   const view = useNav((s) => s.view);
   switch (view.kind) {
     case "new":

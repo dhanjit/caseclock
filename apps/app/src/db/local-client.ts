@@ -19,15 +19,7 @@
  */
 
 import type { Database } from "@sqlite.org/sqlite-wasm";
-import {
-  createDb,
-  importDb,
-  exportDb,
-  saveVaultToOpfs,
-  loadVaultFromOpfs,
-  opfsAvailable,
-  validateRestoredDb,
-} from "./sqlite-blob";
+import { createDb, importDb, exportDb, validateRestoredDb } from "./sqlite-blob";
 import {
   initVault,
   openVault,
@@ -38,6 +30,7 @@ import {
 } from "@/crypto/envelope";
 import { applyMigrations } from "./schema";
 import type { Bind, DbClient, DbRow, SqlStatement } from "./types";
+import { opfsVaultStore, type VaultStore } from "./vault-store";
 
 const VAULT_FILE = "caseclock.vault";
 
@@ -56,11 +49,14 @@ export class LocalDbClient implements DbClient {
   private db: Database | null = null;
   private session: VaultSession | null = null;
   private readonly kdf: KdfParams;
-  /** Serializes all mutating ops so OPFS writes never overlap. */
+  /** Where the encrypted vault blob persists (OPFS on web, Filesystem on native). */
+  private readonly store: VaultStore;
+  /** Serializes all mutating ops so vault writes never overlap. */
   private tail: Promise<unknown> = Promise.resolve();
 
-  constructor(kdf: KdfParams = KDF_DEFAULT) {
+  constructor(kdf: KdfParams = KDF_DEFAULT, store: VaultStore = opfsVaultStore) {
     this.kdf = kdf;
+    this.store = store;
   }
 
   private serialize<T>(op: () => Promise<T>): Promise<T> {
@@ -74,10 +70,10 @@ export class LocalDbClient implements DbClient {
   }
 
   async vaultExists(): Promise<boolean> {
-    if (!opfsAvailable()) {
+    if (!this.store.available()) {
       throw new Error("Persistent storage (OPFS) is unavailable in this browser or private window.");
     }
-    return (await loadVaultFromOpfs(VAULT_FILE)) !== null;
+    return (await this.store.load(VAULT_FILE)) !== null;
   }
 
   async createVault(passphrase: string): Promise<void> {
@@ -86,13 +82,13 @@ export class LocalDbClient implements DbClient {
     await applyMigrations(dbIO(db));
     const bytes = await exportDb(db);
     const { vault, session } = await initVault(passphrase, bytes, this.kdf);
-    await saveVaultToOpfs(VAULT_FILE, vault);
+    await this.store.save(VAULT_FILE, vault);
     this.db = db;
     this.session = session;
   }
 
   async unlock(passphrase: string): Promise<void> {
-    const vault = await loadVaultFromOpfs(VAULT_FILE);
+    const vault = await this.store.load(VAULT_FILE);
     if (!vault) throw new Error("No vault on this device — create one first.");
     const { session, dbBytes } = await openVault(passphrase, vault);
     const db = await importDb(dbBytes);
@@ -202,6 +198,6 @@ export class LocalDbClient implements DbClient {
     );
     const bytes = await exportDb(this.db);
     const vault = await resealVault(this.session, bytes);
-    await saveVaultToOpfs(VAULT_FILE, vault);
+    await this.store.save(VAULT_FILE, vault);
   }
 }

@@ -16,6 +16,15 @@ importers:
       '@capacitor/filesystem':
         specifier: ^8
         version: 8.1.2(@capacitor/core@8.4.1)
+      '@capacitor/ios':
+        specifier: ^8
+        version: 8.4.1(@capacitor/core@8.4.1)
+      '@capacitor/local-notifications':
+        specifier: ^8
+        version: 8.2.0(@capacitor/core@8.4.1)
+      '@capgo/capacitor-updater':
+        specifier: ^8.50.1
+        version: 8.50.1(@capacitor/core@8.4.1)
       '@mlc-ai/web-llm':
         specifier: ^0.2.84
         version: 0.2.84
@@ -176,8 +185,23 @@ packages:
     peerDependencies:
       '@capacitor/core': '>=8.0.0'
 
+  '@capacitor/ios@8.4.1':
+    resolution: {integrity: sha512-EgcAk7NYheHMTyP3CUrA65qKs4D2UEAKgw44HI6Uk3dTw6KjLQkdLOQWvbeRncHaZ2gklfOojUoc5DlSw2lhYg==}
+    peerDependencies:
+      '@capacitor/core': ^8.4.0
+
+  '@capacitor/local-notifications@8.2.0':
+    resolution: {integrity: sha512-fvLY0w2w4MiX+DD4+Wv4DOwOLdzKZsMDwAcRv/Juudd+QbKbn69s6cM3xVqPwAiDqfnqsY4/S8xtQD6M73wY2A==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
+
   '@capacitor/synapse@1.0.4':
     resolution: {integrity: sha512-/C1FUo8/OkKuAT4nCIu/34ny9siNHr9qtFezu4kxm6GY1wNFxrCFWjfYx5C1tUhVGz3fxBABegupkpjXvjCHrw==}
+
+  '@capgo/capacitor-updater@8.50.1':
+    resolution: {integrity: sha512-hbmTokcq/Gh9tDeCNP7mlSs3TE8axF/LXqOZqBeDoAh+4/i0PH9n1sjBaI3jhff5EwpkPsw6jp9Y8QCTTPhdmg==}
+    peerDependencies:
+      '@capacitor/core': ^8.0.0
 
   '@esbuild/aix-ppc64@0.21.5':
     resolution: {integrity: sha512-1SDgH6ZSPTlggy1yI6+Dbkiz8xzpHJEVAlF/AM1tHPLsf5STom9rwtjE4hKAF20FfXXNTFqEYXyJNWh1GiZedQ==}
@@ -1897,7 +1921,19 @@ snapshots:
       '@capacitor/core': 8.4.1
       '@capacitor/synapse': 1.0.4
 
+  '@capacitor/ios@8.4.1(@capacitor/core@8.4.1)':
+    dependencies:
+      '@capacitor/core': 8.4.1
+
+  '@capacitor/local-notifications@8.2.0(@capacitor/core@8.4.1)':
+    dependencies:
+      '@capacitor/core': 8.4.1
+
   '@capacitor/synapse@1.0.4': {}
+
+  '@capgo/capacitor-updater@8.50.1(@capacitor/core@8.4.1)':
+    dependencies:
+      '@capacitor/core': 8.4.1
 
   '@esbuild/aix-ppc64@0.21.5':
     optional: true

@@ -4,6 +4,17 @@
  * nothing here is load-bearing, and a browser without these still runs the app.
  */
 
+import { Capacitor } from "@capacitor/core";
+
+/**
+ * True inside the native Capacitor shell (iOS/Android), false on the web/PWA.
+ * Drives platform-specific wiring — notably the vault persistence sink: native
+ * uses a real app-private file (@capacitor/filesystem); web uses OPFS.
+ */
+export function isNativePlatform(): boolean {
+  return Capacitor.isNativePlatform();
+}
+
 /** True when running as an installed PWA (home-screen / standalone), not a tab. */
 export function isStandalone(): boolean {
   if (typeof window === "undefined") return false;

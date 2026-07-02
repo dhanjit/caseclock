@@ -14,6 +14,9 @@
   "dependencies": {
     "@capacitor/core": "^8",
     "@capacitor/filesystem": "^8",
+    "@capacitor/ios": "^8",
+    "@capacitor/local-notifications": "^8",
+    "@capgo/capacitor-updater": "^8.50.1",
     "@mlc-ai/web-llm": "^0.2.84",
     "@sqlite.org/sqlite-wasm": "3.53.0-build1",
     "libsodium-wrappers-sumo": "^0.8.4",

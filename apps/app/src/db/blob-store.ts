@@ -14,20 +14,9 @@
  */
 
 import type { DbClient } from "./types";
-import { writeOpfsBlob, readOpfsBlob, deleteOpfsBlob, opfsAvailable } from "./sqlite-blob";
+import { vaultSink, type BlobBackend } from "./sink";
 
-/** Pluggable storage backend so tests can run without OPFS (node). */
-export interface BlobBackend {
-  write(name: string, bytes: Uint8Array): Promise<void>;
-  read(name: string): Promise<Uint8Array | null>;
-  delete(name: string): Promise<void>;
-}
-
-const opfsBackend: BlobBackend = {
-  write: writeOpfsBlob,
-  read: readOpfsBlob,
-  delete: deleteOpfsBlob,
-};
+export type { BlobBackend } from "./sink";
 
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
@@ -39,12 +28,12 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
 export class BlobStore {
   constructor(
     private readonly client: DbClient,
-    private readonly backend: BlobBackend = opfsBackend,
+    private readonly backend: BlobBackend = vaultSink().blobs,
   ) {}
 
   /** Is sidecar storage usable here? (false on old iOS Safari / no-OPFS contexts.) */
   available(): boolean {
-    return opfsAvailable();
+    return vaultSink().available();
   }
 
   /**

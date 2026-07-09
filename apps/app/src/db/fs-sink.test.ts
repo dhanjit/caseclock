@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // In-memory fake of @capacitor/filesystem, recording operation order.
 const files = new Map<string, string>();
 const ops: string[] = [];
+let failNextRead: string | null = null;
 
 vi.mock("@capacitor/filesystem", () => {
   const key = (dir: string | undefined, path: string) => `${dir}:${path}`;
@@ -14,6 +15,11 @@ vi.mock("@capacitor/filesystem", () => {
         files.set(key(o.directory, o.path), o.data);
       },
       async readFile(o: { path: string; directory?: string }) {
+        if (failNextRead) {
+          const m = failNextRead;
+          failNextRead = null;
+          throw new Error(m);
+        }
         const data = files.get(key(o.directory, o.path));
         if (data === undefined) throw new Error("File does not exist");
         return { data };
@@ -42,6 +48,7 @@ describe("createFilesystemSink", () => {
   beforeEach(() => {
     files.clear();
     ops.length = 0;
+    failNextRead = null;
   });
 
   it("is always available on native", () => {
@@ -89,5 +96,14 @@ describe("createFilesystemSink", () => {
     await sink.blobs.delete("abc123");
     expect(await sink.blobs.read("abc123")).toBeNull();
     await sink.blobs.delete("abc123"); // deleting a missing blob is tolerated
+  });
+
+  it("aborts the save (no swallow) on a real backup-read I/O error, leaving the vault intact", async () => {
+    const sink = createFilesystemSink();
+    await sink.saveVault("v", bytes(1)); // establish a primary
+    failNextRead = "OS-PLUG-FILE-9999 transient I/O error"; // NOT a 'does not exist' error
+    await expect(sink.saveVault("v", bytes(2))).rejects.toThrow(/I\/O/);
+    failNextRead = null;
+    expect(await sink.loadVault("v")).toEqual(bytes(1)); // original preserved, not lost
   });
 });

@@ -47,7 +47,7 @@ export function createFilesystemSink(): VaultSink {
 
     async saveVault(name, ciphertext) {
       // Keep the last good generation as .bak before we touch the primary.
-      const current = await readEntry(name, VAULT_DIR).catch(() => null);
+      const current = await readEntry(name, VAULT_DIR);
       if (current) await writeEntry(`${name}.bak`, VAULT_DIR, current);
 
       // Stage the new content, then promote tmp → primary via rename (APFS move).

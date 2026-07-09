@@ -30,3 +30,8 @@ export function vaultSink(): VaultSink {
   if (!sink) sink = Capacitor.isNativePlatform() ? createFilesystemSink() : createOpfsSink();
   return sink;
 }
+
+/** Test-only: clear the memoized sink so both platform branches can be exercised. */
+export function __resetVaultSinkForTests(): void {
+  sink = null;
+}

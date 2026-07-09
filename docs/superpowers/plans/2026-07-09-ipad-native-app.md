@@ -1911,6 +1911,15 @@ git commit -m "docs: iOS native phase shipped — TestFlight build delivered"
 
 ---
 
+## Deferred code-review findings (address before / during device testing)
+
+Surfaced by adversarial review of the DB-persistence layer (reviewer pulled the real `@capacitor/filesystem` v8 native Swift/Kotlin source + wrote probe tests). The CRITICAL one was **fixed in commit `79bf95d`**; the rest are deferred here with rationale.
+
+1. **[HIGH — data availability] `loadVault` has no `.bak` fallback for a present-but-CORRUPT primary** (`src/db/fs-sink.ts:44`). `??` only falls back when the primary read returns `null`, never when it returns garbage. Native writes are confirmed **non-atomic** (iOS `value.write(to:)` with no `.atomic`; Android plain `FileOutputStream`), so a crash mid-write (reachable via the `rename`-throws → direct-write fallback at ~line 58) can leave a readable-but-truncated primary. Then `LocalDbClient.unlock()` throws an opaque decrypt error and never tries `.bak`, even though a good generation may exist on-device. **Proper fix:** in `LocalDbClient.unlock()`, catch the `openVault` failure and retry against the `.bak` generation specifically (needs a sink method to read `.bak` in isolation, since `loadVault` currently coalesces primary→.bak). **Why deferred:** the fix spans `unlock()` + crypto + a new sink entry point, and its value hinges on how atomic `rename` actually is on the target iOS version — which Task 12's on-device durability matrix is exactly the place to measure. Do this **with** Task 12 (add a "corrupt the primary on-device, confirm .bak recovery" row).
+2. **[MEDIUM — robustness] `missing()` classifies read errors by matching free-text** (`src/db/fs-sink.ts:25`). Verified correct against today's iOS/Android plugin messages, but a message reword in a future `@capacitor/filesystem` patch would silently break it. Harden by matching the plugin's structured error `code` (e.g. `OS-PLUG-FILE-0008` for fileNotFound) instead of/in addition to the message.
+3. **[MEDIUM — pre-existing, not introduced here] `LocalDbClient.createVault()` bypasses the write mutex** (`src/db/local-client.ts:~87`): it calls `vaultSink().saveVault(...)` directly, not through `this.serialize()`, unlike every other mutating path. Two concurrent `createVault()` calls (UI double-tap before the button disables) both pass `vaultExists()` and both hit the sink unserialized, violating the sink's "callers MUST serialize" contract. Guard the first-run path (disable the create button on submit and/or route through `serialize()`).
+4. **[LOW] Android `Directory.LibraryNoCloud` ≈ `Library`** — backup exclusion for sidecar blobs is iOS-only; if Android ships (M11), exclude via a manifest-level mechanism, not the directory choice.
+
 ## Post-plan follow-ups (explicitly deferred)
 
 1. **Face ID warm-session accelerator (§6.5)** — separate design + plan (biometric-gated Keychain key wrapping the KEK; needs custom native code).

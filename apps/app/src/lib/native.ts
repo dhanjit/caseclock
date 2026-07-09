@@ -16,17 +16,27 @@ export async function initNative(): Promise<void> {
   void registerNotificationActions();
   startNotificationPipeline();
 
-  const [{ CapacitorUpdater }, { PrivacyScreen }] = await Promise.all([
-    import("@capgo/capacitor-updater"),
-    import("@capacitor/privacy-screen"),
-  ]);
-
-  // MANDATORY every launch — without it Capgo rolls back to the previous
-  // bundle after appReadyTimeout. Harmless while autoUpdate is false.
+  // MANDATORY on every launch, called FIRST and in ISOLATION — Capgo's native
+  // watchdog silently rolls the whole app back to the previous bundle if this
+  // doesn't fire within appReadyTimeout (~10s). It must NOT be coupled to any
+  // other plugin's import (a failed privacy-screen chunk in an OTA bundle must
+  // never be able to skip it) and its own failure must be swallowed, not left as
+  // an unhandled rejection. Harmless while autoUpdate is false.
   // §6.9 note: OTA traffic happens in this NATIVE plugin only; the web bundle
   // still makes zero fetch calls (the no-egress CI assertion is unaffected).
-  void CapacitorUpdater.notifyAppReady();
+  try {
+    const { CapacitorUpdater } = await import("@capgo/capacitor-updater");
+    await CapacitorUpdater.notifyAppReady();
+  } catch (e) {
+    console.error("[native] notifyAppReady failed:", e);
+  }
 
-  // §6.8 — blur the app-switcher snapshot so case text never leaks.
-  void PrivacyScreen.enable({ ios: { blurEffect: "dark" } });
+  // §6.8 — blur the app-switcher snapshot so case text never leaks. Independent
+  // of the updater; its failure must not affect update-readiness above.
+  try {
+    const { PrivacyScreen } = await import("@capacitor/privacy-screen");
+    await PrivacyScreen.enable({ ios: { blurEffect: "dark" } });
+  } catch (e) {
+    console.error("[native] privacy-screen enable failed:", e);
+  }
 }

@@ -5,6 +5,8 @@
  * not durable across app updates — see docs/ios-native-handoff.md #1).
  */
 import { createOpfsSink } from "./opfs-sink";
+import { Capacitor } from "@capacitor/core";
+import { createFilesystemSink } from "./fs-sink";
 
 /** Pluggable storage backend for the sidecar blob store (encrypted originals). */
 export interface BlobBackend {
@@ -25,6 +27,6 @@ let sink: VaultSink | null = null;
 
 /** The platform persistence sink. Lazy so tests can vi.mock the plugins first. */
 export function vaultSink(): VaultSink {
-  if (!sink) sink = createOpfsSink();
+  if (!sink) sink = Capacitor.isNativePlatform() ? createFilesystemSink() : createOpfsSink();
   return sink;
 }

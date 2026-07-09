@@ -6,6 +6,7 @@ import { useSession } from "@/state/session";
 import { useCases } from "@/state/cases";
 import { useNav } from "@/state/nav";
 import { registerServiceWorker } from "@/lib/platform";
+import { initNative } from "@/lib/native";
 
 // Dev-only handles to the real store instances (stripped from production builds).
 if (import.meta.env.DEV) {
@@ -17,6 +18,7 @@ if (import.meta.env.DEV) {
 // content-hashed assets are cached for instant offline loads. Production only —
 // dev stays SW-free (always-fresh while iterating). See src/lib/platform.ts.
 registerServiceWorker();
+void initNative();
 
 const rootEl = document.getElementById("root");
 if (!rootEl) throw new Error("Root element #root not found");

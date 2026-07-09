@@ -1,8 +1,10 @@
 import { useRef, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import { useSession } from "@/state/session";
 import { useNav } from "@/state/nav";
 import { useCases } from "@/state/cases";
 import { useWatchlist } from "@/state/watchlist";
+import { useNotifySettings } from "@/state/notify-settings";
 import { exportBackup, prepareImport, applyImport, type BackupInfo } from "@/db/backup";
 import { loadSampleData } from "@/state/seed";
 import { buildAllCasesIcs } from "@/domain/ics";
@@ -10,6 +12,7 @@ import { DEFAULT_SETTINGS } from "@/domain/types";
 import { todayISO } from "@/rules/dates";
 import { estimateStrength } from "@/lib/passphrase";
 import { fmtDate } from "@/lib/format";
+import { scheduleTestNotification } from "@/lib/notifications";
 import { Section, Field } from "@/features/components/bits";
 import { TopBar, btn } from "@/features/components/TopBar";
 
@@ -191,6 +194,8 @@ export function SettingsView() {
 
         <CalendarExport />
 
+        {Capacitor.isNativePlatform() && <NotificationSettings />}
+
         <WatchlistManager />
 
         <DemoData />
@@ -268,6 +273,36 @@ function DemoData() {
         {busy ? "Loading…" : "Load sample cases"}
       </button>
       {msg && <p className="mt-2 text-xs text-ok">{msg}</p>}
+    </Section>
+  );
+}
+
+function NotificationSettings() {
+  const enabled = useNotifySettings((s) => s.enabled);
+  const setEnabled = useNotifySettings((s) => s.setEnabled);
+  const [testState, setTestState] = useState<"idle" | "scheduled" | "denied">("idle");
+
+  async function sendTest() {
+    setTestState((await scheduleTestNotification()) ? "scheduled" : "denied");
+  }
+
+  return (
+    <Section title="Deadline notifications" hint="Best effort — the in-app agenda is the system of record">
+      <label className="flex items-center gap-1.5 text-xs text-ink-dim">
+        <input type="checkbox" checked={enabled} onChange={(e) => void setEnabled(e.target.checked)} />
+        Schedule OS alarms for statutory deadlines (next 30 days)
+      </label>
+      <div className="mt-3 flex items-center gap-3">
+        <button onClick={() => void sendTest()} className={btn("ghost")}>
+          Send test notification
+        </button>
+        {testState === "scheduled" && (
+          <span className="text-xs text-ink-dim">Fires in ~2 minutes — lock the device to see it.</span>
+        )}
+        {testState === "denied" && (
+          <span className="text-xs text-red-400">Notifications are denied — enable them in iOS Settings.</span>
+        )}
+      </div>
     </Section>
   );
 }

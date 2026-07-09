@@ -33,7 +33,7 @@ export interface Agenda {
   upcoming: AgendaItem[];
 }
 
-const SEVERITY_RANK: Record<Severity, number> = {
+export const SEVERITY_RANK: Record<Severity, number> = {
   "statutory-critical": 0,
   statutory: 1,
   "statutory-condonable": 2,

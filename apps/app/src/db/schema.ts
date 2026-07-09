@@ -8,7 +8,7 @@
 
 import type { Bind } from "./types";
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 /** Ordered migration steps. Index i upgrades the DB from version i to i+1. */
 export const MIGRATIONS: string[][] = [
@@ -80,6 +80,23 @@ export const MIGRATIONS: string[][] = [
        created_at         INTEGER NOT NULL
      )`,
     `CREATE INDEX IF NOT EXISTS idx_documents_case ON documents(case_id)`,
+  ],
+  // 4 → 5 : alert_state (M8) — per-occurrence OS-notification state so the
+  //         daily-OVERDUE digest and per-deadline alarms honor snooze/ack, keyed
+  //         (case_id, rule_id, occurrence_date) per RESEARCH §7 (acking today's
+  //         review must not suppress next month's). The in-app agenda is NOT
+  //         filtered by this — it stays the system of record.
+  [
+    `CREATE TABLE IF NOT EXISTS alert_state (
+       case_id         TEXT NOT NULL,
+       rule_id         TEXT NOT NULL,
+       occurrence_date TEXT NOT NULL,
+       instance_id     TEXT NOT NULL DEFAULT '',
+       state           TEXT NOT NULL,
+       snoozed_until   TEXT,
+       updated_at      INTEGER NOT NULL,
+       PRIMARY KEY (case_id, rule_id, occurrence_date, instance_id)
+     )`,
   ],
 ];
 

@@ -18,6 +18,7 @@ import { useSession } from "@/state/session";
 import { useNav } from "@/state/nav";
 import { useCases } from "@/state/cases";
 import { useWatchlist } from "@/state/watchlist";
+import { useNotifySettings } from "@/state/notify-settings";
 import { useAutoLock } from "@/features/lock/useAutoLock";
 
 function Shell() {
@@ -56,6 +57,7 @@ export default function App() {
     if (status === "unlocked") {
       void useCases.getState().load();
       void useWatchlist.getState().load();
+      void useNotifySettings.getState().load();
     }
   }, [status]);
 

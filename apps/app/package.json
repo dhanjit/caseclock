@@ -9,11 +9,18 @@
     "build": "node scripts/bundle-ocr-assets.mjs && tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "ios:sync": "pnpm build && cap sync ios",
+    "ios:open": "cap open ios"
   },
   "dependencies": {
     "@capacitor/core": "^8",
     "@capacitor/filesystem": "^8",
+    "@capacitor/ios": "^8",
+    "@capacitor/local-notifications": "^8",
+    "@capacitor/privacy-screen": "^2",
+    "@capacitor/splash-screen": "^8",
+    "@capgo/capacitor-updater": "^8",
     "@mlc-ai/web-llm": "^0.2.84",
     "@sqlite.org/sqlite-wasm": "3.53.0-build1",
     "libsodium-wrappers-sumo": "^0.8.4",
@@ -25,6 +32,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^8",
     "@tailwindcss/vite": "^4",
     "@types/libsodium-wrappers-sumo": "^0.8.2",
@@ -32,6 +40,7 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@vitejs/plugin-react": "^4",
+    "sharp": "^0.35.3",
     "tailwindcss": "^4",
     "typescript": "~5.6.3",
     "vite": "^6",

@@ -46,6 +46,7 @@ interface RuleResult {
   type: string;
   dueAt: ISODate | null;
   occurrenceDate?: ISODate | null;
+  instanceId?: string;
   state: DeadlineState;
   owes?: DeadlineEvent["owes"];
   note?: string;
@@ -238,6 +239,7 @@ export const RULE_REGISTRY: Rule[] = [
           type: courtPr ? `Court PR — ${month} (by 7th)` : `Monthly PR — ${month} (by 7th)`,
           dueAt: due,
           occurrenceDate: due,
+          instanceId: month,
           state: stateVs(due, today, filed.has(month)),
           owes: "IO",
           note: "Reckoned from the 1st; never pending beyond the 7th.",
@@ -300,6 +302,7 @@ export const RULE_REGISTRY: Rule[] = [
             type: `Expert report pending — ${e.reportToObtain || e.description}`,
             dueAt: due,
             occurrenceDate: due,
+            instanceId: e.id,
             state,
             owes: "FSL" as const,
             note: "Auto-alert: pending >2 days from forwarding; clears when the report is marked received.",
@@ -469,7 +472,7 @@ export const RULE_REGISTRY: Rule[] = [
       return targets.map((accused) => {
         const who = accused?.name ? ` — ${accused.name}` : "";
         if (accused?.otherPendingCases) {
-          return { type: `s.479 undertrial release${who}`, dueAt: null, state: "na" as const, note: "Barred — multiple pending offences/cases." };
+          return { type: `s.479 undertrial release${who}`, dueAt: null, instanceId: accused?.id, state: "na" as const, note: "Barred — multiple pending offences/cases." };
         }
         const fraction = accused?.firstTimeOffender ? 1 / 3 : 1 / 2;
         const days = Math.round(fraction * c.maxSentenceYears! * 365);
@@ -479,6 +482,7 @@ export const RULE_REGISTRY: Rule[] = [
           type: `s.479 undertrial release${who} (${accused?.firstTimeOffender ? "1/3" : "1/2"} of max)`,
           dueAt: due,
           occurrenceDate: due,
+          instanceId: accused?.id,
           state: stateVs(due, today, released),
           note: "Jail Supt. has the s.479(3) duty to apply; not for life/death.",
         };
@@ -544,6 +548,7 @@ export const RULE_REGISTRY: Rule[] = [
           type: "Bail hearing — prepare objections",
           dueAt: h.hearingDate,
           occurrenceDate: h.hearingDate,
+          instanceId: h.id,
           state: hearingState(h, today),
           owes: "self" as const,
           note: "File status report + case-diary extracts; brief PP; produce antecedents.",
@@ -563,6 +568,7 @@ export const RULE_REGISTRY: Rule[] = [
           type: `Court hearing — ${h.purpose}`,
           dueAt: h.hearingDate,
           occurrenceDate: h.hearingDate,
+          instanceId: h.id,
           state: hearingState(h, today),
         })),
   },
@@ -583,6 +589,7 @@ export const RULE_REGISTRY: Rule[] = [
           type: `Superior court — ${h.forum ?? "SC/HC"}${h.purpose === "slp" ? " · SLP" : h.purpose === "writ" ? " · Writ" : ""}`,
           dueAt: h.hearingDate,
           occurrenceDate: h.hearingDate,
+          instanceId: h.id,
           state: hearingState(h, today),
           note: "Top priority — SC/HC listing.",
         })),
@@ -606,6 +613,7 @@ export const RULE_REGISTRY: Rule[] = [
           type: `${processRequestLabel(r)} — response${r.refNo ? ` (${r.refNo})` : ""}`,
           dueAt: r.expectedResponseDate!,
           occurrenceDate: r.expectedResponseDate!,
+          instanceId: r.id,
           state: stateVs(r.expectedResponseDate!, today, false),
           owes: "self" as const,
           note: "Follow up — expected response date has been set for this request.",
@@ -707,6 +715,7 @@ export function computeDeadlines(
         type: r.type,
         dueAt: r.dueAt,
         occurrenceDate: r.occurrenceDate ?? r.dueAt,
+        instanceId: r.instanceId,
         severity: rule.severity,
         lawRef: rule.lawRef,
         verified: rule.verified,

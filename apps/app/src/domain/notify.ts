@@ -30,6 +30,7 @@ export interface PlannedNotification {
   caseId: string | null; // deep-link target (null for the digest)
   ruleId: string | null;
   occurrenceDate: ISODate | null;
+  instanceId: string | null; // fan-out discriminator (null for the digest)
   kind: "deadline" | "overdue-digest";
 }
 
@@ -54,7 +55,14 @@ export function planNotifications(
   const out = new Map<string, PlannedNotification>();
 
   const stateFor = (i: AgendaItem) =>
-    alertStates.get(alertKey(i.caseId, i.deadline.ruleId, i.deadline.occurrenceDate ?? i.deadline.dueAt ?? ""));
+    alertStates.get(
+      alertKey(
+        i.caseId,
+        i.deadline.ruleId,
+        i.deadline.occurrenceDate ?? i.deadline.dueAt ?? "",
+        i.deadline.instanceId ?? "",
+      ),
+    );
 
   // 1) Bounded daily-OVERDUE digest — loud lane only, unacknowledged only.
   const loudOverdue = agenda.overdue.filter((i) => !i.silent && stateFor(i)?.state !== "acknowledged");
@@ -75,6 +83,7 @@ export function planNotifications(
         caseId: null,
         ruleId: null,
         occurrenceDate: null,
+        instanceId: null,
         kind: "overdue-digest",
       });
     }
@@ -90,8 +99,9 @@ export function planNotifications(
       if (diffDays(fireDate, today) <= 0) continue; // today/past → the on-screen agenda owns it
       if (st?.state === "snoozed" && st.snoozedUntil && fireDate <= st.snoozedUntil) continue;
       const daysLeft = diffDays(d.dueAt, fireDate);
-      // key mirrors ics.eventUid: dueAt+type (ruleId alone is not unique per day)
-      const key = `${item.caseId}|${d.dueAt}|${d.type}@${fireDate}`;
+      // key mirrors ics.eventUid: dueAt+type (ruleId alone is not unique per day);
+      // instanceId disambiguates fan-out siblings that also share dueAt+type.
+      const key = `${item.caseId}|${d.dueAt}|${d.type}|${d.instanceId ?? ""}@${fireDate}`;
       out.set(key, {
         id: hashId(key),
         key,
@@ -102,6 +112,7 @@ export function planNotifications(
         caseId: item.caseId,
         ruleId: d.ruleId,
         occurrenceDate: d.occurrenceDate ?? d.dueAt,
+        instanceId: d.instanceId ?? null,
         kind: "deadline",
       });
     }

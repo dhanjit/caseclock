@@ -19,8 +19,8 @@ import { addDays, type ISODate } from "@/rules/dates";
 import { useNav } from "@/state/nav";
 
 type PendingAction =
-  | { kind: "ack"; caseId: string; ruleId: string; occurrenceDate: string }
-  | { kind: "snooze"; caseId: string; ruleId: string; occurrenceDate: string }
+  | { kind: "ack"; caseId: string; ruleId: string; occurrenceDate: string; instanceId: string }
+  | { kind: "snooze"; caseId: string; ruleId: string; occurrenceDate: string; instanceId: string }
   | { kind: "ack-all-overdue" };
 
 const queue: PendingAction[] = [];
@@ -33,6 +33,7 @@ interface Extra {
   caseId?: string;
   ruleId?: string;
   occurrenceDate?: string;
+  instanceId?: string;
   kind?: string;
 }
 
@@ -56,12 +57,12 @@ export function handleNotificationAction(event: ActionPerformed): void {
   if (actionId === "ack") {
     if (extra.kind === "overdue-digest") queue.push({ kind: "ack-all-overdue" });
     else if (extra.caseId && extra.ruleId && extra.occurrenceDate)
-      queue.push({ kind: "ack", caseId: extra.caseId, ruleId: extra.ruleId, occurrenceDate: extra.occurrenceDate });
+      queue.push({ kind: "ack", caseId: extra.caseId, ruleId: extra.ruleId, occurrenceDate: extra.occurrenceDate, instanceId: extra.instanceId ?? "" });
     return;
   }
 
   if (actionId === "snooze-1d" && extra.caseId && extra.ruleId && extra.occurrenceDate) {
-    queue.push({ kind: "snooze", caseId: extra.caseId, ruleId: extra.ruleId, occurrenceDate: extra.occurrenceDate });
+    queue.push({ kind: "snooze", caseId: extra.caseId, ruleId: extra.ruleId, occurrenceDate: extra.occurrenceDate, instanceId: extra.instanceId ?? "" });
   }
 }
 
@@ -76,15 +77,15 @@ export async function flushPendingActions(
   const store = new AlertStateStore(client);
   for (const a of actions) {
     if (a.kind === "ack") {
-      await store.acknowledge(a.caseId, a.ruleId, a.occurrenceDate);
+      await store.acknowledge(a.caseId, a.ruleId, a.occurrenceDate, a.instanceId);
     } else if (a.kind === "snooze") {
-      await store.snooze(a.caseId, a.ruleId, a.occurrenceDate, addDays(today, 1));
+      await store.snooze(a.caseId, a.ruleId, a.occurrenceDate, addDays(today, 1), a.instanceId);
     } else {
       // "Acknowledge all" from the digest: ack every currently-loud overdue occurrence.
       const agenda = buildAgenda(aggregates, DEFAULT_SETTINGS, today);
       for (const item of agenda.overdue.filter((i) => !i.silent)) {
         const d = item.deadline;
-        await store.acknowledge(item.caseId, d.ruleId, d.occurrenceDate ?? d.dueAt ?? "");
+        await store.acknowledge(item.caseId, d.ruleId, d.occurrenceDate ?? d.dueAt ?? "", d.instanceId ?? "");
       }
     }
   }

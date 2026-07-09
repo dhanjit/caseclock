@@ -70,7 +70,7 @@ export async function applyNotificationPlan(plan: PlannedNotification[], now: Da
       body: p.body,
       schedule: { at, allowWhileIdle: true },
       actionTypeId: p.kind === "overdue-digest" ? ACTION_TYPE_OVERDUE : ACTION_TYPE_DEADLINE,
-      extra: { caseId: p.caseId, ruleId: p.ruleId, occurrenceDate: p.occurrenceDate, kind: p.kind },
+      extra: { caseId: p.caseId, ruleId: p.ruleId, occurrenceDate: p.occurrenceDate, instanceId: p.instanceId, kind: p.kind },
     }));
   if (toSchedule.length > 0) {
     await LocalNotifications.schedule({ notifications: toSchedule });

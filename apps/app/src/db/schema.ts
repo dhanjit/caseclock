@@ -91,10 +91,11 @@ export const MIGRATIONS: string[][] = [
        case_id         TEXT NOT NULL,
        rule_id         TEXT NOT NULL,
        occurrence_date TEXT NOT NULL,
+       instance_id     TEXT NOT NULL DEFAULT '',
        state           TEXT NOT NULL,
        snoozed_until   TEXT,
        updated_at      INTEGER NOT NULL,
-       PRIMARY KEY (case_id, rule_id, occurrence_date)
+       PRIMARY KEY (case_id, rule_id, occurrence_date, instance_id)
      )`,
   ],
 ];

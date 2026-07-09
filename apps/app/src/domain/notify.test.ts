@@ -71,8 +71,8 @@ describe("planNotifications", () => {
     const ov = item({ dueAt: "2026-07-01", state: "overdue" }, { bucket: "overdue" });
     const up = item({ dueAt: "2026-07-19", ruleId: "r2", type: "PR due" }, { bucket: "upcoming" });
     const states = new Map<string, AlertState>([
-      [alertKey("c1", "r1", "2026-07-01"), { caseId: "c1", ruleId: "r1", occurrenceDate: "2026-07-01", state: "acknowledged", snoozedUntil: null }],
-      [alertKey("c1", "r2", "2026-07-19"), { caseId: "c1", ruleId: "r2", occurrenceDate: "2026-07-19", state: "acknowledged", snoozedUntil: null }],
+      [alertKey("c1", "r1", "2026-07-01"), { caseId: "c1", ruleId: "r1", occurrenceDate: "2026-07-01", instanceId: "", state: "acknowledged", snoozedUntil: null }],
+      [alertKey("c1", "r2", "2026-07-19"), { caseId: "c1", ruleId: "r2", occurrenceDate: "2026-07-19", instanceId: "", state: "acknowledged", snoozedUntil: null }],
     ]);
     expect(planNotifications(agenda({ overdue: [ov], upcoming: [up] }), states, TODAY)).toHaveLength(0);
   });
@@ -80,7 +80,7 @@ describe("planNotifications", () => {
   it("snooze suppresses fire dates up to snoozedUntil only", () => {
     const up = item({ dueAt: "2026-07-19" });
     const states = new Map<string, AlertState>([
-      [alertKey("c1", "r1", "2026-07-19"), { caseId: "c1", ruleId: "r1", occurrenceDate: "2026-07-19", state: "snoozed", snoozedUntil: "2026-07-12" }],
+      [alertKey("c1", "r1", "2026-07-19"), { caseId: "c1", ruleId: "r1", occurrenceDate: "2026-07-19", instanceId: "", state: "snoozed", snoozedUntil: "2026-07-12" }],
     ]);
     const plan = planNotifications(agenda({ upcoming: [up] }), states, TODAY);
     expect(plan.map((p) => p.fireDate).sort()).toEqual(["2026-07-16", "2026-07-19"]);
@@ -107,5 +107,29 @@ describe("planNotifications", () => {
     expect(new Set(plan.map((p) => p.id)).size).toBe(plan.length);
     expect(hashId("x")).toBe(hashId("x"));
     expect(hashId("x")).not.toBe(hashId("y"));
+  });
+});
+
+describe("sibling-occurrence keying", () => {
+  it("does not collapse two siblings that differ only by instanceId", () => {
+    const a = item({ dueAt: "2026-07-19", instanceId: "p1" });
+    const b = item({ dueAt: "2026-07-19", instanceId: "p2" }); // same caseId/type/dueAt
+    const plan = planNotifications(agenda({ upcoming: [a, b] }), none, TODAY);
+    // each sibling → its own 3 fires (due day + 2 lead offsets); no Map overwrite
+    expect(plan.filter((p) => p.caseId === "c1")).toHaveLength(6);
+    expect(new Set(plan.map((p) => p.id)).size).toBe(plan.length); // all ids distinct
+  });
+
+  it("acks one sibling occurrence without suppressing the other", () => {
+    const a = item({ dueAt: "2026-07-19", instanceId: "h1", type: "Court hearing — framing" });
+    const b = item({ dueAt: "2026-07-19", instanceId: "h2", type: "Court hearing — arguments" });
+    const states = new Map([
+      [alertKey("c1", "r1", "2026-07-19", "h1"),
+       { caseId: "c1", ruleId: "r1", occurrenceDate: "2026-07-19", instanceId: "h1", state: "acknowledged" as const, snoozedUntil: null }],
+    ]);
+    const plan = planNotifications(agenda({ upcoming: [a, b] }), states, TODAY);
+    // h1 fully acked → gone; h2 fully present (3 fires)
+    expect(plan.some((p) => p.title.includes("framing"))).toBe(false);
+    expect(plan.filter((p) => p.title.includes("arguments"))).toHaveLength(3);
   });
 });

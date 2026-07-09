@@ -312,6 +312,10 @@ export interface DeadlineEvent {
   type: string; // human label
   dueAt: ISODate | null;
   occurrenceDate: ISODate | null; // AlertState keying (usually = dueAt)
+  /** Sub-entity discriminator for fan-out rules (per accused/hearing/evidence/PR):
+   *  distinguishes sibling deadlines that share (caseId, ruleId, occurrenceDate).
+   *  Undefined for single-result rules. Feeds alertKey + the notification dedup key. */
+  instanceId?: string;
   severity: Severity;
   lawRef: string;
   verified: Verified;

@@ -44,6 +44,7 @@ function planned(over: Partial<PlannedNotification>): PlannedNotification {
     caseId: "c1",
     ruleId: "r1",
     occurrenceDate: "2026-07-20",
+    instanceId: null,
     kind: "deadline",
     ...over,
   };

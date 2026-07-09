@@ -6,7 +6,31 @@
 > the Mac (Xcode). This file is the baton. Work top-to-bottom; the **Critical
 > verifications** section is where the real risk is, not the happy path.
 
-## Where things stand
+---
+
+## ⏱ STATUS — 2026-07-09: the **code layer is built**. Only Xcode/device/account work remains.
+
+Executed on `claude/ipad-os-app-readiness-d59f08` (16 commits; **234 tests green**, typecheck clean, `pnpm build` succeeds). Full task-by-task detail + the exact code lives in [docs/superpowers/plans/2026-07-09-ipad-native-app.md](superpowers/plans/2026-07-09-ipad-native-app.md).
+
+**Done in code (no Mac needed, already committed):**
+- Native deps installed + pinned (`@capacitor/ios`, `local-notifications`, `splash-screen`, `privacy-screen`, `@capgo/capacitor-updater`, dev `sharp`/`@capacitor/assets`); `capacitor.config.ts` has the `SplashScreen` (dark `#0b1120`) + `CapacitorUpdater` (autoUpdate off) blocks.
+- **Filesystem vault sink** behind a new `VaultSink` seam (`src/db/sink.ts` / `fs-sink.ts`) — the durable-storage fix for WKWebView. Web still uses OPFS; native uses `@capacitor/filesystem` (vault → `Library`, blobs → `LibraryNoCloud`). A review caught + we fixed a **silent-vault-loss bug** here (fail-loud on I/O error).
+- **Full M8 notification system**: pure `planNotifications` materializer (30-day horizon, iOS-64-cap severity-prioritized, bounded 14-day OVERDUE digest, snooze/ack), `alert_state` table, LocalNotifications adapter (cancel+reschedule), tap→case deep-link + locked-vault ack/snooze queue, the unlock/data-change pipeline, a Settings toggle + test-alarm button. A review caught + we fixed a **cross-occurrence keying collision** (co-accused / same-day hearings) and two race/isolation issues.
+- App icon (1024²) + dark splash (2732²) rendered to `assets/` from `icon-square.svg`.
+
+**NOT done — needs your Mac (full Xcode, not the CLT on the build box), your iPad, and Apple/Capgo accounts:**
+1. `pnpm add @capacitor/ios` is already in package.json — run **`pnpm exec cap add ios`** to scaffold `ios/` (commit it), then `pnpm run ios:sync`, `pnpm run ios:open`.
+2. Xcode signing → run on the iPad → **the vault-durability matrix** (kill / reinstall / reboot — the #1 risk below), plus splash/blur/auto-lock checks. *(plan Task 12)*
+3. `pnpm exec capacitor-assets generate --ios` to turn `assets/` into the Xcode asset catalogs. *(plan Task 11 tail)*
+4. On-device **notification verification** (permission, killed-app alarm, deep-link, ack, snooze, toggle). *(plan Task 13)*
+5. **Capgo OTA activation** — `npx @capgo/cli init` (your account/API key), verify the OTA loop. *(plan Task 14)*
+6. **TestFlight** — archive, upload, deliver to the friend's iPad. *(plan Task 15)*
+
+**⚠️ Must fold in during device testing (deferred code-review finding, HIGH):** `loadVault` has no `.bak` fallback when the primary is present-but-corrupt, and native writes are non-atomic — so a torn write can wedge unlock even though a good generation exists. Fix `LocalDbClient.unlock()` to retry the `.bak` generation on decrypt failure, and add a "corrupt-the-primary → confirm recovery" row to the Task 12 matrix. Details + other deferred findings are in the plan's *Deferred code-review findings* section.
+
+---
+
+## Where things stand (original baton — background)
 
 - **Product:** CaseClock — local-first, encrypted statutory-deadline cockpit (see [PLAN.md](PLAN.md) / [RESEARCH.md](RESEARCH.md)). iPad Pro is the target device.
 - **PWA is live** at `app.caseclock.dhanjit.me` (Cloudflare). The native app loads the *same* `dist` build inside a Capacitor WebView — same UI, same code.

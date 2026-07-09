@@ -30,7 +30,29 @@ export function startNotificationPipeline(): void {
     timer = setTimeout(() => void run(), 400);
   };
 
+  let running = false;
+  let rerun = false;
+
+  // Collapse overlapping triggers: if a materialization is already in flight,
+  // request one more pass and return; the active run loops again so the freshest
+  // data wins and two runs never race the OS cancel+schedule.
   async function run(): Promise<void> {
+    if (running) {
+      rerun = true;
+      return;
+    }
+    running = true;
+    try {
+      do {
+        rerun = false;
+        await materialize();
+      } while (rerun);
+    } finally {
+      running = false;
+    }
+  }
+
+  async function materialize(): Promise<void> {
     try {
       const session = useSession.getState();
       const { aggregates, loaded } = useCases.getState();

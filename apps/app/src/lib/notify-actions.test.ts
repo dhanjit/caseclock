@@ -64,4 +64,29 @@ describe("notification actions", () => {
     expect(pendingActionCount()).toBe(0);
     expect((await new AlertStateStore(client).list()).size).toBe(0);
   });
+
+  it("re-queues a failed action instead of dropping its siblings when the vault re-locks mid-flush", async () => {
+    const { AlertStateStore } = await import("@/domain/alert-state");
+    // Make the FIRST alert_state write throw once (simulates the vault re-locking mid-batch).
+    let throwOnce = true;
+    const realExec = client.exec.bind(client);
+    vi.spyOn(client, "exec").mockImplementation(async (sql: string, bind?: unknown[]) => {
+      if (throwOnce && /alert_state/.test(sql)) { throwOnce = false; throw new Error("Vault is locked."); }
+      return realExec(sql, bind as never);
+    });
+
+    handleNotificationAction(event("ack", { caseId: "cA", ruleId: "r1", occurrenceDate: "2026-07-10", kind: "deadline" }));
+    handleNotificationAction(event("ack", { caseId: "cB", ruleId: "r1", occurrenceDate: "2026-07-10", kind: "deadline" }));
+    await flushPendingActions(client, [], "2026-07-09");
+
+    // exactly one action re-queued (the one that hit the lock); the other committed
+    expect(pendingActionCount()).toBe(1);
+    const store = new AlertStateStore(client);
+    expect((await store.list()).size).toBe(1);
+
+    // next unlock drains the re-queued one cleanly
+    await flushPendingActions(client, [], "2026-07-09");
+    expect(pendingActionCount()).toBe(0);
+    expect((await new AlertStateStore(client).list()).size).toBe(2);
+  });
 });

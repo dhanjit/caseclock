@@ -75,18 +75,25 @@ export async function flushPendingActions(
   if (queue.length === 0) return;
   const actions = queue.splice(0, queue.length);
   const store = new AlertStateStore(client);
+  const failed: PendingAction[] = [];
   for (const a of actions) {
-    if (a.kind === "ack") {
-      await store.acknowledge(a.caseId, a.ruleId, a.occurrenceDate, a.instanceId);
-    } else if (a.kind === "snooze") {
-      await store.snooze(a.caseId, a.ruleId, a.occurrenceDate, addDays(today, 1), a.instanceId);
-    } else {
-      // "Acknowledge all" from the digest: ack every currently-loud overdue occurrence.
-      const agenda = buildAgenda(aggregates, DEFAULT_SETTINGS, today);
-      for (const item of agenda.overdue.filter((i) => !i.silent)) {
-        const d = item.deadline;
-        await store.acknowledge(item.caseId, d.ruleId, d.occurrenceDate ?? d.dueAt ?? "", d.instanceId ?? "");
+    try {
+      if (a.kind === "ack") {
+        await store.acknowledge(a.caseId, a.ruleId, a.occurrenceDate, a.instanceId);
+      } else if (a.kind === "snooze") {
+        await store.snooze(a.caseId, a.ruleId, a.occurrenceDate, addDays(today, 1), a.instanceId);
+      } else {
+        // "Acknowledge all" from the digest: ack every currently-loud overdue occurrence.
+        const agenda = buildAgenda(aggregates, DEFAULT_SETTINGS, today);
+        for (const item of agenda.overdue.filter((i) => !i.silent)) {
+          const d = item.deadline;
+          await store.acknowledge(item.caseId, d.ruleId, d.occurrenceDate ?? d.dueAt ?? "", d.instanceId ?? "");
+        }
       }
+    } catch (e) {
+      failed.push(a);
+      console.error("[notify] deferred action re-queued (vault re-locked?):", e);
     }
   }
+  if (failed.length) queue.unshift(...failed);
 }

@@ -133,7 +133,7 @@ last without blocking the preview build.
   2. **Dual-mode source behind one interface:** `ManualAttachSource` (preview — `<input type=file>`/drag-drop, identical data model) and `FolderSyncSource` (deployment — File System Access `showDirectoryPicker` on web, or `@capacitor/filesystem` on native: parent → per-case-by-case-number → index file).
   3. **Three parsers → same `DocumentRecord`:** index-file parser, filename-convention (`date_type_reference.pdf`) parser, and a **deploy-only** PDF/Word text parser (add pdf.js; always draft-for-confirmation per spec).
   4. Wire documents into §9 search (letter/ref no.), heading-9 evidence letter numbers, and §6 request ref numbers. Legacy strategy: cutoff + seed ~10 priority cases first.
-- **Effort:** L · **Migration:** yes (`documents` table) · **Note:** folder-sync activates **only at deployment**; the manual-attach path keeps the preview build identical, so this can land last.
+- **Effort:** L · **Migration:** yes (`documents` table) · **Scope decision (2026-07-08):** live folder-sync activation (`FolderSyncSource` — `showDirectoryPicker`/`@capacitor/filesystem` directory scan) is **never required**. The manual-attach path (`ManualAttachSource` + the three parsers running on picked/dropped files) is the permanent, complete answer for §7. Build the seam, keep the `FolderSyncSource` interface only if trivial, but do not wire or ship a live directory watcher.
 
 ---
 
@@ -166,4 +166,5 @@ FRRO/MEA 15-day) persist and alert on expected-response; the case can be flagged
 to the top with fuller detail (lighter cases alert silently); global search finds ULFA-I / accused /
 section / ref-no across cases; a printable A4 13-heading briefing note generates; deadlines export to
 .ics; the mind map renders the 13 branches with colour-coded accused + RED banned-org nodes + linked
-exhibit thumbnails; and (at deployment) the per-case folder ingests letter numbers/dates/subjects.
+exhibit thumbnails; and documents attached manually (`ManualAttachSource`) ingest letter
+numbers/dates/subjects via the parsers. Live folder-sync is explicitly **out of scope** — see §3.2.

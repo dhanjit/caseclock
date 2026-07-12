@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const files = new Map<string, string>();
 const ops: string[] = [];
 let failNextRead: string | null = null;
+let failNextReadError: Error | null = null;
 
 vi.mock("@capacitor/filesystem", () => {
   const key = (dir: string | undefined, path: string) => `${dir}:${path}`;
@@ -15,6 +16,11 @@ vi.mock("@capacitor/filesystem", () => {
         files.set(key(o.directory, o.path), o.data);
       },
       async readFile(o: { path: string; directory?: string }) {
+        if (failNextReadError) {
+          const err = failNextReadError;
+          failNextReadError = null;
+          throw err;
+        }
         if (failNextRead) {
           const m = failNextRead;
           failNextRead = null;
@@ -49,6 +55,7 @@ describe("createFilesystemSink", () => {
     files.clear();
     ops.length = 0;
     failNextRead = null;
+    failNextReadError = null;
   });
 
   it("is always available on native", () => {
@@ -96,6 +103,23 @@ describe("createFilesystemSink", () => {
     await sink.blobs.delete("abc123");
     expect(await sink.blobs.read("abc123")).toBeNull();
     await sink.blobs.delete("abc123"); // deleting a missing blob is tolerated
+  });
+
+  it("loadVaultBackup reads ONLY the .bak generation, never the primary", async () => {
+    const sink = createFilesystemSink();
+    files.set("LIBRARY:v", btoa(String.fromCharCode(1)));
+    expect(await sink.loadVaultBackup("v")).toBeNull(); // primary alone → null
+    files.set("LIBRARY:v.bak", btoa(String.fromCharCode(2)));
+    expect(await sink.loadVaultBackup("v")).toEqual(bytes(2));
+  });
+
+  it("treats the plugin's structured fileNotFound code as missing even if the message changes", async () => {
+    const sink = createFilesystemSink();
+    const err = Object.assign(new Error("some future reworded message"), {
+      code: "OS-PLUG-FILE-0008",
+    });
+    failNextReadError = err;
+    expect(await sink.loadVaultBackup("v")).toBeNull(); // not rethrown as I/O
   });
 
   it("aborts the save (no swallow) on a real backup-read I/O error, leaving the vault intact", async () => {

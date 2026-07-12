@@ -39,6 +39,13 @@ import type { Bind, DbClient, DbRow, SqlStatement } from "./types";
 
 const VAULT_FILE = "caseclock.vault";
 
+/** Constant-shape byte compare (skip a pointless second Argon2id on identical generations). */
+function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
 /** A MigrationIO bound to a specific Database (runs migrations without touching the live persist path). */
 function dbIO(db: Database) {
   return {
@@ -79,25 +86,47 @@ export class LocalDbClient implements DbClient {
   }
 
   async createVault(passphrase: string): Promise<void> {
-    if (await this.vaultExists()) throw new Error("A vault already exists on this device.");
-    const db = await createDb();
-    await applyMigrations(dbIO(db));
-    const bytes = await exportDb(db);
-    const { vault, session } = await initVault(passphrase, bytes, this.kdf);
-    await vaultSink().saveVault(VAULT_FILE, vault);
-    this.db = db;
-    this.session = session;
+    // Serialized like every other mutating path: two concurrent creates must not
+    // both pass the exists check and hit the sink unserialized.
+    await this.serialize(async () => {
+      if (await this.vaultExists()) throw new Error("A vault already exists on this device.");
+      const db = await createDb();
+      await applyMigrations(dbIO(db));
+      const bytes = await exportDb(db);
+      const { vault, session } = await initVault(passphrase, bytes, this.kdf);
+      await vaultSink().saveVault(VAULT_FILE, vault);
+      this.db = db;
+      this.session = session;
+    });
   }
 
   async unlock(passphrase: string): Promise<void> {
     const vault = await vaultSink().loadVault(VAULT_FILE);
     if (!vault) throw new Error("No vault on this device — create one first.");
-    const { session, dbBytes } = await openVault(passphrase, vault);
-    const db = await importDb(dbBytes);
+    let opened: Awaited<ReturnType<typeof openVault>>;
+    try {
+      opened = await openVault(passphrase, vault);
+    } catch (primaryError) {
+      // Native writes are non-atomic, so a crash mid-save can leave a readable-
+      // but-torn primary while a good .bak generation still exists. loadVault
+      // only falls back when the primary is MISSING — retry .bak explicitly.
+      const bak = await vaultSink()
+        .loadVaultBackup(VAULT_FILE)
+        .catch(() => null);
+      if (!bak || sameBytes(bak, vault)) throw primaryError;
+      try {
+        opened = await openVault(passphrase, bak);
+      } catch {
+        throw primaryError; // wrong passphrase / both generations bad
+      }
+    }
+    const db = await importDb(opened.dbBytes);
     await applyMigrations(dbIO(db)); // upgrade older-schema vaults
     this.db = db;
-    this.session = session;
-    await this.serialize(() => this.persist()); // persist any migration upgrade
+    this.session = opened.session;
+    // Persist any migration upgrade — and re-seal a recovered .bak generation
+    // back into the primary (self-heal after torn-write recovery).
+    await this.serialize(() => this.persist());
   }
 
   async lock(): Promise<void> {

@@ -19,6 +19,12 @@ export interface VaultSink {
   /** Is durable storage usable here? (false on old iOS Safari / no-OPFS web contexts.) */
   available(): boolean;
   loadVault(name: string): Promise<Uint8Array | null>;
+  /**
+   * Read ONLY the .bak generation. loadVault coalesces primary→.bak, so a
+   * present-but-corrupt primary shadows a good backup — unlock's recovery path
+   * needs the backup in isolation.
+   */
+  loadVaultBackup(name: string): Promise<Uint8Array | null>;
   saveVault(name: string, ciphertext: Uint8Array): Promise<void>;
   blobs: BlobBackend;
 }

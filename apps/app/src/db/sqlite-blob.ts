@@ -190,6 +190,12 @@ export async function loadVaultFromOpfs(name: string): Promise<Uint8Array | null
   return (await readEntry(name)) ?? (await readEntry(`${name}.bak`));
 }
 
+/** ONLY the .bak generation — unlock's corrupt-primary recovery path. */
+export async function loadVaultBackupFromOpfs(name: string): Promise<Uint8Array | null> {
+  if (!opfsAvailable()) throw new Error("OPFS unavailable in this browser/mode");
+  return readEntry(`${name}.bak`);
+}
+
 // ---------------------------------------------------------------------------
 // Sidecar blob storage (§10/§7). Big binaries (encrypted image/document
 // originals) live in an OPFS `blobs/` subdir, content-addressed by name, OUTSIDE

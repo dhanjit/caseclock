@@ -20,7 +20,12 @@ const VAULT_DIR = Directory.Library;
 const BLOB_DIR = Directory.LibraryNoCloud;
 const BLOB_PREFIX = "blobs/";
 
-const missing = (e: unknown) => /does not exist|no such file/i.test(String((e as Error)?.message ?? e));
+// fileNotFound: match the plugin's structured error code first (stable across
+// message rewordings in @capacitor/filesystem patches), free-text as fallback.
+const MISSING_CODE = "OS-PLUG-FILE-0008";
+const missing = (e: unknown) =>
+  (e as { code?: string })?.code === MISSING_CODE ||
+  /does not exist|no such file/i.test(String((e as Error)?.message ?? e));
 
 async function readEntry(path: string, directory: Directory): Promise<Uint8Array | null> {
   try {
@@ -43,6 +48,10 @@ export function createFilesystemSink(): VaultSink {
 
     async loadVault(name) {
       return (await readEntry(name, VAULT_DIR)) ?? (await readEntry(`${name}.bak`, VAULT_DIR));
+    },
+
+    async loadVaultBackup(name) {
+      return readEntry(`${name}.bak`, VAULT_DIR);
     },
 
     async saveVault(name, ciphertext) {

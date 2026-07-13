@@ -1,0 +1,35 @@
+// swift-tools-version: 5.9
+import PackageDescription
+
+// DO NOT MODIFY THIS FILE - managed by Capacitor CLI commands
+let package = Package(
+    name: "CapApp-SPM",
+    platforms: [.iOS(.v15)],
+    products: [
+        .library(
+            name: "CapApp-SPM",
+            targets: ["CapApp-SPM"])
+    ],
+    dependencies: [
+        .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "8.4.1"),
+        .package(name: "CapacitorFilesystem", path: "../../../../../node_modules/.pnpm/@capacitor+filesystem@8.1.2_@capacitor+core@8.4.1/node_modules/@capacitor/filesystem"),
+        .package(name: "CapacitorLocalNotifications", path: "../../../../../node_modules/.pnpm/@capacitor+local-notifications@8.2.0_@capacitor+core@8.4.1/node_modules/@capacitor/local-notifications"),
+        .package(name: "CapacitorPrivacyScreen", path: "../../../../../node_modules/.pnpm/@capacitor+privacy-screen@2.0.1_@capacitor+core@8.4.1/node_modules/@capacitor/privacy-screen"),
+        .package(name: "CapacitorSplashScreen", path: "../../../../../node_modules/.pnpm/@capacitor+splash-screen@8.0.1_@capacitor+core@8.4.1/node_modules/@capacitor/splash-screen"),
+        .package(name: "CapgoCapacitorUpdater", path: "../../../../../node_modules/.pnpm/@capgo+capacitor-updater@8.50.2_@capacitor+core@8.4.1/node_modules/@capgo/capacitor-updater")
+    ],
+    targets: [
+        .target(
+            name: "CapApp-SPM",
+            dependencies: [
+                .product(name: "Capacitor", package: "capacitor-swift-pm"),
+                .product(name: "Cordova", package: "capacitor-swift-pm"),
+                .product(name: "CapacitorFilesystem", package: "CapacitorFilesystem"),
+                .product(name: "CapacitorLocalNotifications", package: "CapacitorLocalNotifications"),
+                .product(name: "CapacitorPrivacyScreen", package: "CapacitorPrivacyScreen"),
+                .product(name: "CapacitorSplashScreen", package: "CapacitorSplashScreen"),
+                .product(name: "CapgoCapacitorUpdater", package: "CapgoCapacitorUpdater")
+            ]
+        )
+    ]
+)

@@ -18,15 +18,17 @@ Executed on `claude/ipad-os-app-readiness-d59f08` (16 commits; **234 tests green
 - **Full M8 notification system**: pure `planNotifications` materializer (30-day horizon, iOS-64-cap severity-prioritized, bounded 14-day OVERDUE digest, snooze/ack), `alert_state` table, LocalNotifications adapter (cancel+reschedule), tap→case deep-link + locked-vault ack/snooze queue, the unlock/data-change pipeline, a Settings toggle + test-alarm button. A review caught + we fixed a **cross-occurrence keying collision** (co-accused / same-day hearings) and two race/isolation issues.
 - App icon (1024²) + dark splash (2732²) rendered to `assets/` from `icon-square.svg`.
 
-**NOT done — needs your Mac (full Xcode, not the CLT on the build box), your iPad, and Apple/Capgo accounts:**
-1. `pnpm add @capacitor/ios` is already in package.json — run **`pnpm exec cap add ios`** to scaffold `ios/` (commit it), then `pnpm run ios:sync`, `pnpm run ios:open`.
-2. Xcode signing → run on the iPad → **the vault-durability matrix** (kill / reinstall / reboot — the #1 risk below), plus splash/blur/auto-lock checks. *(plan Task 12)*
-3. `pnpm exec capacitor-assets generate --ios` to turn `assets/` into the Xcode asset catalogs. *(plan Task 11 tail)*
-4. On-device **notification verification** (permission, killed-app alarm, deep-link, ack, snooze, toggle). *(plan Task 13)*
-5. **Capgo OTA activation** — `npx @capgo/cli init` (your account/API key), verify the OTA loop. *(plan Task 14)*
-6. **TestFlight** — archive, upload, deliver to the friend's iPad. *(plan Task 15)*
+**Done since (2026-07-12, on the Mac — no Xcode needed):**
+- ~~`pnpm exec cap add ios`~~ — `ios/` scaffolded, synced, and committed (5 plugins picked up via SPM).
+- ~~`capacitor-assets generate --ios`~~ — icon + light/dark splash rendered into `Assets.xcassets`, committed.
+- ~~HIGH deferred finding (code half)~~ — `unlock()` now retries the `.bak` generation on decrypt failure via a new `VaultSink.loadVaultBackup` seam, and self-heals the primary on the post-unlock persist; `createVault()` routed through the write mutex; `missing()` matches the structured `OS-PLUG-FILE-0008` code. The **on-device half remains**: add the "corrupt-the-primary → confirm .bak recovery" row to the Task 12 matrix.
 
-**⚠️ Must fold in during device testing (deferred code-review finding, HIGH):** `loadVault` has no `.bak` fallback when the primary is present-but-corrupt, and native writes are non-atomic — so a torn write can wedge unlock even though a good generation exists. Fix `LocalDbClient.unlock()` to retry the `.bak` generation on decrypt failure, and add a "corrupt-the-primary → confirm recovery" row to the Task 12 matrix. Details + other deferred findings are in the plan's *Deferred code-review findings* section.
+**NOT done — needs full Xcode (App Store, not just CLT), your iPad, and Apple/Capgo accounts:**
+1. Xcode signing (`pnpm run ios:open`) → run on the iPad → **the vault-durability matrix** (kill / reinstall / reboot / corrupt-primary→.bak recovery — the #1 risk below), plus splash/blur/auto-lock checks. *(plan Task 12)*
+2. On-device **notification verification** (permission, killed-app alarm, deep-link, ack, snooze, toggle). *(plan Task 13)*
+3. **Capgo OTA activation** — `npx @capgo/cli init` (your account/API key), verify the OTA loop. *(plan Task 14)*
+4. **TestFlight** — archive, upload, deliver to the friend's iPad. *(plan Task 15)*
+5. Remember `pnpm build && pnpm exec cap sync ios` before every Xcode run — the scaffold ships whatever `dist/` it last copied.
 
 ---
 

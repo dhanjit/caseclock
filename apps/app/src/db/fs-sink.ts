@@ -31,7 +31,10 @@ async function readEntry(path: string, directory: Directory): Promise<Uint8Array
   try {
     const res = await Filesystem.readFile({ path, directory });
     if (typeof res.data !== "string") throw new Error("Expected base64 data from the native Filesystem plugin.");
-    return fromBase64(res.data);
+    const decoded = fromBase64(res.data);
+    // A zero-length file is a torn/aborted write, not a valid vault — treat as absent
+    // so loadVault falls through to the .bak / .tmp recovery generations.
+    return decoded.length > 0 ? decoded : null;
   } catch (e) {
     if (missing(e)) return null;
     throw e; // real I/O errors must not masquerade as "no vault" (would allow overwrite)
@@ -47,7 +50,13 @@ export function createFilesystemSink(): VaultSink {
     available: () => true,
 
     async loadVault(name) {
-      return (await readEntry(name, VAULT_DIR)) ?? (await readEntry(`${name}.bak`, VAULT_DIR));
+      // Primary, then the crash-recovery generations: .bak = previous good,
+      // .tmp = a complete staged copy from a promote that was interrupted.
+      return (
+        (await readEntry(name, VAULT_DIR)) ??
+        (await readEntry(`${name}.bak`, VAULT_DIR)) ??
+        (await readEntry(`${name}.tmp`, VAULT_DIR))
+      );
     },
 
     async loadVaultBackup(name) {
@@ -61,17 +70,23 @@ export function createFilesystemSink(): VaultSink {
 
       // Stage the new content, then promote tmp → primary via rename (APFS move).
       await writeEntry(`${name}.tmp`, VAULT_DIR, ciphertext);
+      let primaryGood = false;
       try {
         await Filesystem.deleteFile({ path: name, directory: VAULT_DIR }).catch(() => {});
         await Filesystem.rename({ from: `${name}.tmp`, to: name, directory: VAULT_DIR, toDirectory: VAULT_DIR });
+        primaryGood = true;
       } catch {
-        // rename failed → direct-write fallback (same policy as the OPFS sink)
+        // rename failed → direct-write fallback. Keep .tmp (the complete staged copy)
+        // until the rewritten primary is confirmed readable, so a crash mid-rewrite
+        // recovers from .tmp/.bak instead of a torn primary.
         await writeEntry(name, VAULT_DIR, ciphertext);
-        await Filesystem.deleteFile({ path: `${name}.tmp`, directory: VAULT_DIR }).catch(() => {});
+        primaryGood = (await readEntry(name, VAULT_DIR)) !== null;
+        if (primaryGood) await Filesystem.deleteFile({ path: `${name}.tmp`, directory: VAULT_DIR }).catch(() => {});
       }
 
-      // Primary is good — drop the previous generation (see saveVaultToOpfs rationale).
-      await Filesystem.deleteFile({ path: `${name}.bak`, directory: VAULT_DIR }).catch(() => {});
+      // Drop the previous generation ONLY once the new primary is durable; otherwise
+      // keep .bak (and .tmp) as recovery sources.
+      if (primaryGood) await Filesystem.deleteFile({ path: `${name}.bak`, directory: VAULT_DIR }).catch(() => {});
     },
 
     blobs: {

@@ -126,6 +126,25 @@ describe("filesystemVaultStore — native @capacitor/filesystem sink", () => {
     expect(Array.from(got!)).toEqual(Array.from(bytes));
   });
 
+  it("recovers from the .tmp staged copy when the primary is torn (zero-length)", async () => {
+    const bytes = new Uint8Array([9, 9, 9, 9]);
+    await filesystemVaultStore.save(NAME, bytes);
+    const good = h.files.get(NAME)!; // base64 of the good vault
+    // Simulate a crash mid-promote: complete copy survives in .tmp, primary torn empty.
+    h.files.set(`${NAME}.tmp`, good);
+    h.files.set(NAME, "");
+    const got = await filesystemVaultStore.load(NAME);
+    expect(Array.from(got!)).toEqual(Array.from(bytes));
+  });
+
+  it("treats a zero-length primary as absent and recovers from .bak", async () => {
+    const bytes = new Uint8Array([3, 1, 4, 1, 5]);
+    await filesystemVaultStore.save(NAME, bytes);
+    h.files.set(`${NAME}.bak`, h.files.get(NAME)!);
+    h.files.set(NAME, ""); // torn primary, not merely missing
+    expect(Array.from((await filesystemVaultStore.load(NAME))!)).toEqual(Array.from(bytes));
+  });
+
   it("falls back to a direct write when atomic rename fails", async () => {
     const { Filesystem } = (await import("@capacitor/filesystem")) as unknown as {
       Filesystem: { rename: ReturnType<typeof vi.fn> };

@@ -51,7 +51,10 @@ function base64ToBytes(b64: string): Uint8Array {
 async function readRaw(fs: FsModule["Filesystem"], directory: string, path: string): Promise<Uint8Array | null> {
   try {
     const res = await fs.readFile({ path, directory: directory as never });
-    return base64ToBytes(res.data as string);
+    const bytes = base64ToBytes(res.data as string);
+    // A zero-length file is a torn/aborted write, not a valid vault — treat as absent
+    // so load() falls through to the .bak / .tmp recovery generations.
+    return bytes.length > 0 ? bytes : null;
   } catch {
     return null; // not found / unreadable → treated as absent
   }
@@ -84,8 +87,13 @@ export const filesystemVaultStore: VaultStore = {
   async load(name: string): Promise<Uint8Array | null> {
     const { Filesystem, Directory } = await fsModule();
     const dir = Directory.LibraryNoCloud;
-    // Primary, then the `.bak` generation (recovers from a crash mid-write).
-    return (await readRaw(Filesystem, dir, name)) ?? (await readRaw(Filesystem, dir, `${name}.bak`));
+    // Primary, then the crash-recovery generations: `.bak` = previous good,
+    // `.tmp` = a complete staged copy from a promote that was interrupted.
+    return (
+      (await readRaw(Filesystem, dir, name)) ??
+      (await readRaw(Filesystem, dir, `${name}.bak`)) ??
+      (await readRaw(Filesystem, dir, `${name}.tmp`))
+    );
   },
 
   async save(name: string, ciphertext: Uint8Array): Promise<void> {
@@ -96,24 +104,31 @@ export const filesystemVaultStore: VaultStore = {
     const current = await readRaw(Filesystem, dir, name);
     if (current) await writeRaw(Filesystem, dir, `${name}.bak`, current);
 
-    // Stage new content in .tmp (the only file that can tear), then promote.
+    // Stage the complete new content in .tmp (the only file that can tear here).
     const tmp = `${name}.tmp`;
     await writeRaw(Filesystem, dir, tmp, ciphertext);
 
-    let promoted = false;
+    let primaryGood = false;
     try {
+      // Delete the primary only here, immediately before the atomic same-dir rename,
+      // so any interruption BEFORE this leaves the good primary intact.
       await deleteRaw(Filesystem, dir, name);
       await Filesystem.rename({ from: tmp, to: name, directory: dir });
-      promoted = true;
+      primaryGood = true;
     } catch {
-      promoted = false;
+      primaryGood = false;
     }
-    if (!promoted) {
+    if (!primaryGood) {
+      // Atomic promote failed (e.g. rename unsupported). Rewrite the primary, but keep
+      // .tmp (the complete staged copy) until the primary is confirmed readable — so a
+      // crash mid-rewrite recovers from .tmp/.bak instead of a torn primary.
       await writeRaw(Filesystem, dir, name, ciphertext);
-      await deleteRaw(Filesystem, dir, tmp);
+      primaryGood = (await readRaw(Filesystem, dir, name)) !== null;
+      if (primaryGood) await deleteRaw(Filesystem, dir, tmp);
     }
 
-    // Primary is good; drop the previous generation (recreated atop the next write).
-    await deleteRaw(Filesystem, dir, `${name}.bak`);
+    // Drop the previous generation ONLY once the new primary is durable; otherwise
+    // keep .bak (and .tmp) as recovery sources.
+    if (primaryGood) await deleteRaw(Filesystem, dir, `${name}.bak`);
   },
 };

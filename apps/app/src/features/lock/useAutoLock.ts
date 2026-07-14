@@ -14,7 +14,7 @@
 import { useEffect } from "react";
 import { useSession } from "@/state/session";
 
-const IDLE_MS = 90_000; // lock after 90s of no interaction
+const IDLE_MS = 5 * 60_000; // lock after 5 min of no interaction (usable on a glance-at cockpit; backgrounding still locks instantly)
 const HARD_MS = 30 * 60_000; // re-require unlock every 30 min regardless
 
 export function useAutoLock(): void {

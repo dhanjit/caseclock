@@ -21,6 +21,7 @@ import { useWatchlist } from "@/state/watchlist";
 import { useNotifySettings } from "@/state/notify-settings";
 import { useOnboarding } from "@/state/onboarding";
 import { useAutoLock } from "@/features/lock/useAutoLock";
+import { Sidebar } from "@/features/nav/Sidebar";
 
 function Shell() {
   useAutoLock();
@@ -68,5 +69,12 @@ export default function App() {
 
   if (isSpike) return <SpikePanel />;
   if (status !== "unlocked") return <LockScreen />;
-  return <Shell />;
+  return (
+    <div className="flex h-full">
+      <Sidebar />
+      <main className="min-w-0 flex-1 overflow-y-auto overscroll-none">
+        <Shell />
+      </main>
+    </div>
+  );
 }

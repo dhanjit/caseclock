@@ -6,14 +6,31 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
 
+    /// Overlay shown while inactive so case text never lands in the iOS app-switcher
+    /// snapshot (PLAN §6.8). Added on resignActive (before the snapshot), removed on
+    /// becomeActive.
+    private var privacyOverlay: UIView?
+
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Override point for customization after application launch.
         return true
     }
 
+    private func keyWindow() -> UIWindow? {
+        return window
+            ?? UIApplication.shared.windows.first(where: { $0.isKeyWindow })
+            ?? UIApplication.shared.windows.first
+    }
+
     func applicationWillResignActive(_ application: UIApplication) {
-        // Sent when the application is about to move from active to inactive state. This can occur for certain types of temporary interruptions (such as an incoming phone call or SMS message) or when the user quits the application and it begins the transition to the background state.
-        // Use this method to pause ongoing tasks, disable timers, and invalidate graphics rendering callbacks. Games should use this method to pause the game.
+        // Privacy (PLAN §6.8): blur the UI before iOS captures the app-switcher
+        // thumbnail, so sensitive case text is never visible there.
+        guard privacyOverlay == nil, let window = keyWindow() else { return }
+        let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemThickMaterialDark))
+        blur.frame = window.bounds
+        blur.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        window.addSubview(blur)
+        privacyOverlay = blur
     }
 
     func applicationDidEnterBackground(_ application: UIApplication) {
@@ -26,7 +43,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
-        // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
+        // Remove the app-switcher privacy blur now that the app is frontmost again.
+        privacyOverlay?.removeFromSuperview()
+        privacyOverlay = nil
     }
 
     func applicationWillTerminate(_ application: UIApplication) {

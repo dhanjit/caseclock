@@ -19,6 +19,7 @@ import { useNav } from "@/state/nav";
 import { useCases } from "@/state/cases";
 import { useWatchlist } from "@/state/watchlist";
 import { useNotifySettings } from "@/state/notify-settings";
+import { useOnboarding } from "@/state/onboarding";
 import { useAutoLock } from "@/features/lock/useAutoLock";
 
 function Shell() {
@@ -55,9 +56,13 @@ export default function App() {
   // Load cases + the watchlist whenever the vault becomes unlocked (PLAN §6.5 / M4).
   useEffect(() => {
     if (status === "unlocked") {
-      void useCases.getState().load();
-      void useWatchlist.getState().load();
-      void useNotifySettings.getState().load();
+      void (async () => {
+        await useCases.getState().load();
+        await useWatchlist.getState().load();
+        void useNotifySettings.getState().load();
+        // First run: seed the demo cases + show the banner (once, until cleared).
+        await useOnboarding.getState().maybeStartDemo();
+      })();
     }
   }, [status]);
 

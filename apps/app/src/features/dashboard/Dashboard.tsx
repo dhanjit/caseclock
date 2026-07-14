@@ -10,6 +10,8 @@ import { caseLabel, relativeDays } from "@/lib/format";
 import { Section, AgendaRow, Dot } from "@/features/components/bits";
 import { Highlighted } from "@/features/components/Highlighted";
 import { TopBar, btn } from "@/features/components/TopBar";
+import { DemoBanner } from "@/features/onboarding/DemoBanner";
+import { useOnboarding } from "@/state/onboarding";
 
 interface PrioritySummary {
   id: string;
@@ -22,6 +24,7 @@ export function Dashboard() {
   const aggregates = useCases((s) => s.aggregates);
   const go = useNav((s) => s.go);
   const lock = useSession((s) => s.lock);
+  const demoActive = useOnboarding((s) => s.demoActive);
   const today = todayISO();
 
   const { agenda, attention, stats, superior, priorityCases, loudOverdue, silentOverdue } = useMemo(() => {
@@ -83,6 +86,8 @@ export function Dashboard() {
           </>
         }
       />
+
+      {demoActive && <DemoBanner onClear={() => void useOnboarding.getState().clearAndReset()} />}
 
       {aggregates.length === 0 ? (
         <div className="mt-10 grid place-items-center rounded-2xl border border-dashed border-line bg-surface-2 px-6 py-16 text-center">

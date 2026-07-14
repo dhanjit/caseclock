@@ -15,7 +15,7 @@ import {
   type SupervisionEntryRecord,
 } from "@/domain/types";
 import { newId } from "@/lib/id";
-import { fmtDate, relativeDays, severityTone, toneBg, toneText } from "@/lib/format";
+import { fmtDate, relativeDays, severityTone, toneText } from "@/lib/format";
 import { Section, Field, Dot } from "@/features/components/bits";
 import { Highlighted } from "@/features/components/Highlighted";
 import { TopBar, btn } from "@/features/components/TopBar";
@@ -342,16 +342,16 @@ function ClockRow({ d, today }: { d: DeadlineEvent; today: string }) {
       <Dot tone={tone} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm text-ink">{d.type}</p>
-        <p className="truncate text-xs text-ink-dim">
-          {d.lawRef}
-          {d.note ? ` — ${d.note}` : ""}
-        </p>
+        {(() => {
+          const ref = d.lawRef && d.lawRef !== "—" ? d.lawRef : "";
+          const sub = d.note ? `${ref ? `${ref} — ` : ""}${d.note}` : ref;
+          return sub ? <p className="truncate text-xs text-ink-dim">{sub}</p> : null;
+        })()}
       </div>
       <span className={`shrink-0 text-right text-xs font-medium ${toneText[tone]}`}>
         {d.state === "window-open" ? "CLAIMABLE" : d.dueAt ? relativeDays(d.dueAt, today) : d.state}
         {d.approximate ? "*" : ""}
       </span>
-      <span className={`h-1.5 w-1.5 rounded-full ${d.state === "overdue" || d.state === "window-open" ? toneBg[tone] : "bg-transparent"}`} />
     </div>
   );
 }

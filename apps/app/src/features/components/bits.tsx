@@ -63,7 +63,9 @@ export function AgendaRow({
           <span className="truncate">{d.type}</span>
         </p>
         <p className="truncate text-xs text-ink-dim">
-          <Highlighted text={item.caseLabel} />
+          {/* Short label (FIR · PS) — the offence blurb after " — " repeats on every
+              row of a case and just adds noise in a long agenda. */}
+          <Highlighted text={item.caseLabel.split(" — ")[0]} />
           {d.owes ? ` · owes: ${d.owes}` : ""}
           {d.verified === "uncertain" ? " · verify before relying" : ""}
         </p>

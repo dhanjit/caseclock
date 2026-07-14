@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import { useCases } from "@/state/cases";
 import { useNav } from "@/state/nav";
-import { useSession } from "@/state/session";
 import { buildAgenda, casesNeedingAttention, quickStats, type AgendaItem } from "@/rules/agenda";
 import { DEFAULT_SETTINGS } from "@/domain/types";
 import { loadSampleData } from "@/state/seed";
@@ -23,7 +22,6 @@ interface PrioritySummary {
 export function Dashboard() {
   const aggregates = useCases((s) => s.aggregates);
   const go = useNav((s) => s.go);
-  const lock = useSession((s) => s.lock);
   const demoActive = useOnboarding((s) => s.demoActive);
   const today = todayISO();
 
@@ -63,29 +61,7 @@ export function Dashboard() {
 
   return (
     <div className="mx-auto flex min-h-full max-w-5xl flex-col px-4 pb-16 pt-5">
-      <TopBar
-        title="CaseClock"
-        subtitle="Local-first case & deadline cockpit"
-        actions={
-          <>
-            <button onClick={() => go({ kind: "search" })} title="Search cases" className={btn("ghost")}>
-              🔍 Search
-            </button>
-            <button onClick={() => go({ kind: "review" })} className={btn("ghost")}>
-              Review
-            </button>
-            <button onClick={() => go({ kind: "settings" })} title="Settings & backup" aria-label="Settings and backup" className={btn("icon")}>
-              ⚙
-            </button>
-            <button onClick={() => go({ kind: "new" })} className={btn("primary")}>
-              + New Case
-            </button>
-            <button onClick={() => void lock()} title="Lock vault" aria-label="Lock vault" className={btn("icon")}>
-              🔒
-            </button>
-          </>
-        }
-      />
+      <TopBar title="Dashboard" subtitle="Local-first case & deadline cockpit" />
 
       {demoActive && <DemoBanner onClear={() => void useOnboarding.getState().clearAndReset()} />}
 
@@ -159,7 +135,7 @@ export function Dashboard() {
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             <Section title="Today" hint="due / alerting today">
               {agenda.today.length === 0 ? (
-                <p className="py-6 text-center text-sm text-soft">Nothing due today</p>
+                <p className="py-3 text-center text-sm text-soft">Nothing due today</p>
               ) : (
                 <div className="space-y-1">
                   {agenda.today.map((it) => (
@@ -176,7 +152,7 @@ export function Dashboard() {
 
             <Section title="Cases needing attention" hint="stale · review · heavy clock">
               {attention.length === 0 ? (
-                <p className="py-6 text-center text-sm text-soft">All clear</p>
+                <p className="py-3 text-center text-sm text-soft">All clear</p>
               ) : (
                 <div className="space-y-1">
                   {attention.map((f) => (
@@ -195,7 +171,7 @@ export function Dashboard() {
 
             <Section title="Upcoming" hint="next 30 days">
               {agenda.upcoming.length === 0 ? (
-                <p className="py-6 text-center text-sm text-soft">Nothing scheduled</p>
+                <p className="py-3 text-center text-sm text-soft">Nothing scheduled</p>
               ) : (
                 <div className="space-y-1">
                   {agenda.upcoming.slice(0, 12).map((it) => (

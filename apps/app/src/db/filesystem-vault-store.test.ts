@@ -4,6 +4,10 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 const h = vi.hoisted(() => ({
   files: new Map<string, string>(), // path -> base64
   dirsUsed: new Set<string>(),
+  // Models iOS reality: Directory.LibraryNoCloud maps to Library/NoCloud, whose
+  // `NoCloud` subfolder does NOT exist until created. A writeFile without
+  // recursive:true into a missing parent throws (OS-PLUG-FILE-0007).
+  dirExists: false,
 }));
 
 vi.mock("@capacitor/filesystem", () => ({
@@ -16,10 +20,32 @@ vi.mock("@capacitor/filesystem", () => ({
   },
   Encoding: { UTF8: "utf8" },
   Filesystem: {
-    writeFile: vi.fn(async ({ path, data, directory }: { path: string; data: string; directory: string }) => {
+    writeFile: vi.fn(
+      async ({
+        path,
+        data,
+        directory,
+        recursive,
+      }: {
+        path: string;
+        data: string;
+        directory: string;
+        recursive?: boolean;
+      }) => {
+        if (!h.dirExists && !recursive) {
+          throw new Error(
+            "Missing parent directory - possibly recursive=false was passed or parent directory creation failed.",
+          );
+        }
+        if (recursive) h.dirExists = true;
+        h.dirsUsed.add(directory);
+        h.files.set(path, data);
+        return { uri: "mock://" + path };
+      },
+    ),
+    mkdir: vi.fn(async ({ directory }: { directory: string }) => {
+      h.dirExists = true;
       h.dirsUsed.add(directory);
-      h.files.set(path, data);
-      return { uri: "mock://" + path };
     }),
     readFile: vi.fn(async ({ path }: { path: string }) => {
       if (!h.files.has(path)) throw new Error("File does not exist");
@@ -44,6 +70,7 @@ const NAME = "caseclock.vault";
 beforeEach(() => {
   h.files.clear();
   h.dirsUsed.clear();
+  h.dirExists = false; // fresh install: the LibraryNoCloud dir does not exist yet
   vi.clearAllMocks();
 });
 
@@ -108,6 +135,13 @@ describe("filesystemVaultStore — native @capacitor/filesystem sink", () => {
     await filesystemVaultStore.save(NAME, bytes);
     expect(Array.from((await filesystemVaultStore.load(NAME))!)).toEqual(Array.from(bytes));
     expect(h.files.has(`${NAME}.tmp`)).toBe(false);
+  });
+
+  it("creates the LibraryNoCloud parent dir on first save (no 'missing parent directory')", async () => {
+    // Fresh install: h.dirExists=false. The first vault write must create the dir,
+    // or Capacitor throws OS-PLUG-FILE-0007 (the bug seen on-device at Create vault).
+    await expect(filesystemVaultStore.save(NAME, new Uint8Array([1, 2, 3]))).resolves.toBeUndefined();
+    expect(Array.from((await filesystemVaultStore.load(NAME))!)).toEqual([1, 2, 3]);
   });
 
   it("available() is true", () => {

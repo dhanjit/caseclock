@@ -58,7 +58,10 @@ async function readRaw(fs: FsModule["Filesystem"], directory: string, path: stri
 }
 
 async function writeRaw(fs: FsModule["Filesystem"], directory: string, path: string, bytes: Uint8Array): Promise<void> {
-  await fs.writeFile({ path, data: bytesToBase64(bytes), directory: directory as never });
+  // recursive:true creates the parent dir if absent. On iOS, Directory.LibraryNoCloud
+  // maps to Library/NoCloud, whose `NoCloud` folder does not exist on a fresh install —
+  // without this the very first vault write fails "missing parent directory".
+  await fs.writeFile({ path, data: bytesToBase64(bytes), directory: directory as never, recursive: true });
 }
 
 async function deleteRaw(fs: FsModule["Filesystem"], directory: string, path: string): Promise<void> {

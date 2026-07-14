@@ -154,44 +154,8 @@ export function Dashboard() {
             </div>
           )}
 
-          {/* Overdue (persistent) — priority cases only; lighter cases monitor silently (§1) */}
-          <div className="mt-3 rounded-xl border border-critical/40 bg-critical/10 p-2">
-            <div className="flex items-center gap-2.5 px-2 py-1 text-sm font-medium text-critical">
-              <Dot tone="critical" /> {loudOverdue.length} overdue
-            </div>
-            {loudOverdue.length > 0 && (
-              <div className="mt-1 space-y-1">
-                {loudOverdue.map((it) => (
-                  <AgendaRow
-                    key={`${it.caseId}:${it.deadline.ruleId}:${it.deadline.occurrenceDate ?? ""}`}
-                    item={it}
-                    today={today}
-                    onOpen={open}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Silently monitored — non-priority overdue, kept out of the loud RED tier (§1) */}
-          {silentOverdue.length > 0 && (
-            <div className="mt-3 rounded-xl border border-line bg-surface-2 p-2">
-              <div className="flex items-center gap-2.5 px-2 py-1 text-sm font-medium text-ink-dim">
-                <Dot tone="soft" /> {silentOverdue.length} overdue · monitored (non-priority — alerting silently)
-              </div>
-              <div className="mt-1 space-y-1 opacity-70">
-                {silentOverdue.map((it) => (
-                  <AgendaRow
-                    key={`silent:${it.caseId}:${it.deadline.ruleId}:${it.deadline.occurrenceDate ?? ""}`}
-                    item={it}
-                    today={today}
-                    onOpen={open}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
+          {/* At-a-glance overview — kept above the (long) overdue queue so the caseload
+              summary is visible without scrolling past every overdue item. */}
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             <Section title="Today" hint="due / alerting today">
               {agenda.today.length === 0 ? (
@@ -264,6 +228,45 @@ export function Dashboard() {
               </dl>
             </Section>
           </div>
+
+          {/* Overdue (persistent) — priority cases only; lighter cases monitor silently (§1) */}
+          <div className="mt-3 rounded-xl border border-critical/40 bg-critical/10 p-2">
+            <div className="flex items-center gap-2.5 px-2 py-1 text-sm font-medium text-critical">
+              <Dot tone="critical" /> {loudOverdue.length} overdue
+            </div>
+            {loudOverdue.length > 0 && (
+              <div className="mt-1 space-y-1">
+                {loudOverdue.map((it) => (
+                  <AgendaRow
+                    key={`${it.caseId}:${it.deadline.ruleId}:${it.deadline.occurrenceDate ?? ""}`}
+                    item={it}
+                    today={today}
+                    onOpen={open}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Silently monitored — non-priority overdue, kept out of the loud RED tier (§1) */}
+          {silentOverdue.length > 0 && (
+            <div className="mt-3 rounded-xl border border-line bg-surface-2 p-2">
+              <div className="flex items-center gap-2.5 px-2 py-1 text-sm font-medium text-ink-dim">
+                <Dot tone="soft" /> {silentOverdue.length} overdue · monitored (non-priority — alerting silently)
+              </div>
+              <div className="mt-1 space-y-1 opacity-70">
+                {silentOverdue.map((it) => (
+                  <AgendaRow
+                    key={`silent:${it.caseId}:${it.deadline.ruleId}:${it.deadline.occurrenceDate ?? ""}`}
+                    item={it}
+                    today={today}
+                    onOpen={open}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
         </>
       )}
 

@@ -19,7 +19,7 @@ export function TopBar({
   actions?: ReactNode;
 }) {
   return (
-    <header className="flex items-center justify-between">
+    <header className="sticky top-0 z-20 -mx-4 flex items-center justify-between gap-2 border-b border-line bg-surface px-4 py-3">
       <div className="flex min-w-0 items-center gap-2.5">
         <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-court/15 text-court">
           <ClockGlyph />

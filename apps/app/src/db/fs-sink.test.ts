@@ -5,6 +5,7 @@ const files = new Map<string, string>();
 const ops: string[] = [];
 let failNextRead: string | null = null;
 let failNextReadError: Error | null = null;
+let failNextRename = false;
 
 vi.mock("@capacitor/filesystem", () => {
   const key = (dir: string | undefined, path: string) => `${dir}:${path}`;
@@ -35,6 +36,10 @@ vi.mock("@capacitor/filesystem", () => {
         ops.push(`delete ${key(o.directory, o.path)}`);
       },
       async rename(o: { from: string; to: string; directory?: string; toDirectory?: string }) {
+        if (failNextRename) {
+          failNextRename = false;
+          throw new Error("rename unsupported");
+        }
         const from = key(o.directory, o.from);
         const data = files.get(from);
         if (data === undefined) throw new Error("File does not exist");
@@ -56,6 +61,7 @@ describe("createFilesystemSink", () => {
     ops.length = 0;
     failNextRead = null;
     failNextReadError = null;
+    failNextRename = false;
   });
 
   it("is always available on native", () => {
@@ -93,6 +99,30 @@ describe("createFilesystemSink", () => {
     const sink = createFilesystemSink();
     files.set("LIBRARY:v.bak", btoa(String.fromCharCode(7)));
     expect(await sink.loadVault("v")).toEqual(bytes(7));
+  });
+
+  it("treats a zero-length primary as absent and recovers from .bak", async () => {
+    const sink = createFilesystemSink();
+    files.set("LIBRARY:v", ""); // torn/aborted write left an empty primary
+    files.set("LIBRARY:v.bak", btoa(String.fromCharCode(7)));
+    expect(await sink.loadVault("v")).toEqual(bytes(7));
+  });
+
+  it("recovers from the .tmp staged copy when the primary is torn (interrupted promote)", async () => {
+    const sink = createFilesystemSink();
+    files.set("LIBRARY:v", ""); // torn primary
+    files.set("LIBRARY:v.tmp", btoa(String.fromCharCode(9, 9))); // complete staged copy survived
+    expect(await sink.loadVault("v")).toEqual(bytes(9, 9));
+  });
+
+  it("on rename failure, rewrites the primary and only then drops .tmp/.bak (no torn-primary window)", async () => {
+    const sink = createFilesystemSink();
+    await sink.saveVault("v", bytes(1)); // establish a primary + prior generation
+    failNextRename = true;
+    await sink.saveVault("v", bytes(2, 2));
+    expect(await sink.loadVault("v")).toEqual(bytes(2, 2)); // fallback rewrite succeeded
+    expect(files.has("LIBRARY:v.tmp")).toBe(false); // tmp dropped after primary confirmed
+    expect(files.has("LIBRARY:v.bak")).toBe(false); // bak dropped after primary confirmed
   });
 
   it("stores blobs under blobs/ in the no-backup directory", async () => {

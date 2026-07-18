@@ -8,7 +8,9 @@
 
 ---
 
-## ⏱ STATUS — 2026-07-09: the **code layer is built**. Only Xcode/device/account work remains.
+## ⏱ STATUS — 2026-07-17: **SHIPPED to App Store Connect.** Build 1.0 (1) uploaded; TestFlight external testing in progress. This file is now the historical baton — current release process lives in [DEPLOY.md](DEPLOY.md), which supersedes the "Ship to TestFlight" section below.
+
+## ⏱ STATUS — 2026-07-09 (historical): the **code layer is built**. Only Xcode/device/account work remains.
 
 Executed on `claude/ipad-os-app-readiness-d59f08` (16 commits; **234 tests green**, typecheck clean, `pnpm build` succeeds). Full task-by-task detail + the exact code lives in [docs/superpowers/plans/2026-07-09-ipad-native-app.md](superpowers/plans/2026-07-09-ipad-native-app.md).
 
@@ -36,7 +38,7 @@ Executed on `claude/ipad-os-app-readiness-d59f08` (16 commits; **234 tests green
 
 - **Product:** CaseClock — local-first, encrypted statutory-deadline cockpit (see [PLAN.md](PLAN.md) / [RESEARCH.md](RESEARCH.md)). iPad Pro is the target device.
 - **PWA is live** at `app.caseclock.dhanjit.me` (Cloudflare). The native app loads the *same* `dist` build inside a Capacitor WebView — same UI, same code.
-- **Capacitor 8 is already configured.** [`apps/app/capacitor.config.ts`](../apps/app/capacitor.config.ts): `appId = me.dhanjit.caseclock`, `appName = CaseClock`, `webDir = dist`. No `ios/` folder exists yet.
+- **Capacitor 8 is already configured.** [`apps/app/capacitor.config.ts`](../apps/app/capacitor.config.ts): `appId = me.dhanjit.caseclock`, `appName = CaseClock`, `webDir = dist`. *(The `ios/` scaffold has since been generated and committed — `apps/app/ios/`.)*
 - **Owner now has:** a Mac (primary machine), an iPhone, an iPad Pro, and an **enrolled Apple Developer account**. So: build/sign/run in Xcode locally — **no cloud CI, no Fastlane, no manual certificates.** Automatic signing in Xcode is the path.
 - **Goal of this phase:** native CaseClock installed on the owner's iPhone/iPad, then delivered to **one friend's iPad via TestFlight**. Plus keep "fast updates" (Capgo OTA for the web layer).
 

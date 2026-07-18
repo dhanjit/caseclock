@@ -39,8 +39,9 @@ pnpm typecheck
 
 ```
 apps/app       # the PWA / Capacitor app
-apps/landing   # marketing site → caseclock.dhanjit.me (PWA install + APK download)
-docs/          # REQUIREMENTS.md (V3 spec, LOCKED), V3-BUILD-PLAN.md (V2→V3 delta),
+apps/landing   # marketing site → caseclock.dhanjit.me (incl. /privacy for App Store Connect)
+docs/          # REQUIREMENTS.md (V3 spec, LOCKED), DEPLOY.md (how everything ships),
+               # V3-BUILD-PLAN.md (V2→V3 delta),
                # sample-cases.md (+ spec/ source docx), RESEARCH.md, PLAN.md, legal-rules.md
 ```
 

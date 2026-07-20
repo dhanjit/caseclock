@@ -289,6 +289,12 @@ current month, FR-II/SP due dates collapsing onto the same 150-day line.
 
 ## 6. Open questions — need Taposh's (officer's) answer before the affected work
 
+> **RESOLVED 2026-07-20** — Dhanjit: *"prefer Taposh's version on the gaps
+> wherever possible."* Decisions + the resulting change contract live in
+> [REQUIREMENTS-V4-DELTA.md](REQUIREMENTS-V4-DELTA.md) (§1 maps each question to
+> its decision; §5 lists the four exceptions where V3/CaseClock stands). The
+> questions below are kept for the record.
+
 1. **Expert-report alert window:** locked V3 says RED once pending **> 2 days**
    from forwarding (CaseClock ships this). V6 prototype uses **7 days**. Which is
    the working rule? (Cheap either way; could be a setting.)

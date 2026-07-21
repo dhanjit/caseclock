@@ -3,8 +3,9 @@
  * their banned-org watchlist entry. `save` upserts by id, so loading is idempotent.
  */
 
-import { sampleAggregates, SAMPLE_WATCHLIST } from "@/domain/seed";
+import { sampleAggregates, SAMPLE_CIO, SAMPLE_WATCHLIST } from "@/domain/seed";
 import { useCases } from "./cases";
+import { useCio } from "./cio";
 import { useWatchlist } from "./watchlist";
 
 export async function loadSampleData(): Promise<void> {
@@ -16,4 +17,7 @@ export async function loadSampleData(): Promise<void> {
   for (const name of SAMPLE_WATCHLIST) {
     await watchlist.add(name);
   }
+  // CIO master list (V7-6) — fixed ids referenced by the sample cases' H5.1.
+  await useCio.getState().load();
+  await useCio.getState().importRecords(SAMPLE_CIO);
 }

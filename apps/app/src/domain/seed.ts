@@ -17,10 +17,16 @@
 
 import { monthsBetween } from "@/rules/dates";
 import type { CaseAggregate } from "./repository";
-import type { CaseRecord, PersonRecord, ProcessRequestRecord } from "./types";
+import type { CaseRecord, ChargesheetRecord, CioRecord, PersonRecord, ProcessRequestRecord } from "./types";
 
 /** Banned-org names to seed onto the global watchlist (auto-RED system-wide, §5). */
 export const SAMPLE_WATCHLIST = ["ULFA-I"];
+
+/** CIO master-list seed (V7-6) — fixed ids so the sample cases can reference them. */
+export const SAMPLE_CIO: CioRecord[] = [
+  { id: "cio-seed-1", name: "Insp. R. Kalita", rank: "Inspector" },
+  { id: "cio-seed-2", name: "SI D. Rao", rank: "Sub-Inspector" },
+];
 
 // ============================ CASE 1 ============================
 // Chargesheeted, trial ongoing, SLP at Supreme Court (bail). UAPA / arms / RDX.
@@ -28,6 +34,7 @@ const C1 = "case-sample-1";
 const c1Persons: PersonRecord[] = [
   {
     id: "c1-a1", caseId: C1, role: "accused", name: "Jahnabi Boro", accusedStatus: "judicial_custody",
+    arrestDate: "2024-03-09",
     custodyHistory: [
       { id: "c1-a1-h1", kind: "police", from: "2024-03-09", to: "2024-03-16" },
       { id: "c1-a1-h2", kind: "judicial", from: "2024-03-17", to: null },
@@ -35,6 +42,10 @@ const c1Persons: PersonRecord[] = [
   },
   {
     id: "c1-a2", caseId: C1, role: "accused", name: "Hiren Das", accusedStatus: "judicial_custody",
+    arrestDate: "2024-03-09",
+    // Live bail matter (heading 12): SLP (Crl) bail pending before the SC — drives
+    // the per-accused BAIL row (V4-DELTA N6) alongside the superior-court listing.
+    bailPending: true, bailDate: "2026-07-09", othersNote: "SLP (Crl) bail pending @ Supreme Court",
     custodyHistory: [
       { id: "c1-a2-h1", kind: "police", from: "2024-03-09", to: "2024-03-15" },
       { id: "c1-a2-h2", kind: "judicial", from: "2024-03-16", to: null },
@@ -42,10 +53,21 @@ const c1Persons: PersonRecord[] = [
   },
   {
     id: "c1-a3", caseId: C1, role: "accused", name: "Montu Rabha", accusedStatus: "charge_sheeted",
+    arrestDate: "2024-03-11",
     custodyHistory: [{ id: "c1-a3-h1", kind: "judicial", from: "2024-03-11", to: null }],
   },
-  { id: "c1-a4", caseId: C1, role: "accused", name: "Sanjib (absconder)", accusedStatus: "absconding" },
+  {
+    id: "c1-a4", caseId: C1, role: "accused", name: "Sanjib (absconder)", accusedStatus: "absconding",
+    othersNote: "LOC issued; Interpol RCN requested",
+  },
   { id: "c1-a5", caseId: C1, role: "accused", name: "Pranab Kalita", accusedStatus: "under_investigation" },
+];
+
+/** Chargesheet register (V4-DELTA N1): main CS-1 (3 accused) + supplementary CS-2
+ * (the absconder) — mirrors the V6 preview seed. */
+const c1Chargesheets: ChargesheetRecord[] = [
+  { id: "c1-cs1", caseId: C1, kind: "main", date: "2024-09-04", court: "NIA Spl. Court, CC 09/2024", accusedIds: ["c1-a1", "c1-a2", "c1-a3"] },
+  { id: "c1-cs2", caseId: C1, kind: "supplementary", date: "2025-02-20", court: "NIA Spl. Court, CC 09/2024", accusedIds: ["c1-a4"] },
 ];
 
 const c1Requests: ProcessRequestRecord[] = [
@@ -72,6 +94,13 @@ const c1Case: CaseRecord = {
   firDate: "2024-03-09",
   policeStation: "PS Latasil, Guwahati",
   district: "Kamrup (M)",
+  // V7 docket-of-record fields (H1.1 / H5.1–5.3)
+  originalFir: "FIR 112/2024, PS Latasil, Guwahati (re-registered as Special NIA Case 04/2024)",
+  cioId: "cio-seed-1",
+  complainant: "State — Insp. R. Kalita, PS Latasil (suo motu, on recovery)",
+  trialCourtName: "NIA Special Court, Guwahati · CC 09/2024",
+  category: "II", // Cat II — active further investigation (supplementary probe qua A-5)
+  demo: true,
   identity: "Recovery of RDX-laden IED & seizure of arms from a proscribed-outfit module at Fancy Bazar.",
   sectionsOfLaw: "UA(P)A 1967 ss.16,18,20,38,39; Explosive Substances Act 1908 ss.3,4,5; BNS 2023 ss.113,61(2); Arms Act ss.25,27.",
   occurrenceDate: "2024-03-08",
@@ -89,7 +118,14 @@ const c1Case: CaseRecord = {
   arrestDate: "2024-03-09",
   firstRemandDate: "2024-03-09",
   custodyStatus: "in_custody",
-  chargesheetFiledDate: "2024-09-04",
+  chargesheetFiledDate: "2024-09-04", // derived from the register on hydration
+  // FR → MHA pipeline (V4-DELTA §2) — fully traversed before the chargesheet;
+  // MHA sanction 28 Aug 2024 matches the sanction request in the tracker.
+  frISubmittedDate: "2024-08-10",
+  dgApprovedDate: "2024-08-16",
+  irForMhaDate: "2024-08-20",
+  mhaSanctionDate: "2024-08-28",
+  spRemarksDate: "2024-08-12",
   firstPrFiledDate: "2024-03-20",
   // Every Court-PR month back-filled except the current one → Jun-2026 Court PR shows overdue.
   prFiledMonths: monthsBetween("2024-03", "2026-05"),
@@ -129,6 +165,7 @@ const case1: CaseAggregate = {
     { id: "c1-ev5", caseId: C1, description: "Seizure witnesses", reportToObtain: "Independent panch evidence (statements u/s 180 BNSS)", status: "received", reportKind: "other", witnesses: 4 },
   ],
   processRequests: c1Requests,
+  chargesheets: c1Chargesheets,
 };
 
 // ============================ CASE 2 ============================
@@ -137,12 +174,14 @@ const C2 = "case-sample-2";
 const c2Persons: PersonRecord[] = [
   {
     id: "c2-a1", caseId: C2, role: "accused", name: "A-1 (foreign national)", accusedStatus: "police_custody",
-    custodyStatus: "in_custody",
+    custodyStatus: "in_custody", arrestDate: "2026-06-04",
+    // Per-accused custody end (V4-DELTA §2) — drives the 1-day-prior production reminder.
+    custodyEndDate: "2026-06-27", othersNote: "LOC issued (entry trace)",
     custodyHistory: [{ id: "c2-a1-h1", kind: "police", from: "2026-06-04", to: "2026-06-27" }],
   },
   {
     id: "c2-a2", caseId: C2, role: "accused", name: "A-2 (foreign national)", accusedStatus: "judicial_custody",
-    custodyStatus: "in_custody",
+    custodyStatus: "in_custody", arrestDate: "2026-06-04", othersNote: "LOC issued; bail opposed",
     custodyHistory: [
       { id: "c2-a2-h1", kind: "police", from: "2026-06-04", to: "2026-06-10" },
       { id: "c2-a2-h2", kind: "judicial", from: "2026-06-11", to: null },
@@ -150,7 +189,7 @@ const c2Persons: PersonRecord[] = [
   },
   {
     id: "c2-a3", caseId: C2, role: "accused", name: "A-3 (foreign national)", accusedStatus: "judicial_custody",
-    custodyStatus: "in_custody",
+    custodyStatus: "in_custody", arrestDate: "2026-06-04", othersNote: "LOC issued; RCN under consideration",
     custodyHistory: [
       { id: "c2-a3-h1", kind: "police", from: "2026-06-04", to: "2026-06-09" },
       { id: "c2-a3-h2", kind: "judicial", from: "2026-06-10", to: null },
@@ -187,6 +226,13 @@ const c2Case: CaseRecord = {
   firDate: "2026-06-02",
   policeStation: "PS Paltan Bazar, Guwahati",
   district: "Kamrup (M)",
+  // V7 docket-of-record fields (H1.1 / H5.1–5.3)
+  originalFir: "FIR 058/2026, PS Paltan Bazar, Guwahati",
+  cioId: "cio-seed-2",
+  complainant: "State — SI D. Rao, PS Paltan Bazar (on source information)",
+  trialCourtName: "CJM Court, Kamrup (M)",
+  category: "I", // Cat I — under active investigation
+  demo: true,
   identity: "Recovery of fake Indian currency & detention of three foreign nationals in a cross-border FICN racket.",
   sectionsOfLaw: "BNS 2023 ss.178,179,180,61(2); Foreigners Act 1946 ss.14,14A,14B; Passport Act 1967 s.12; UA(P)A s.15(1)(a)(iiia) (high-quality FICN).",
   occurrenceDate: "2026-06-02",
@@ -206,7 +252,7 @@ const c2Case: CaseRecord = {
   arrestDate: "2026-06-04",
   firstRemandDate: "2026-06-04",
   custodyStatus: "in_custody",
-  custodyEndDate: "2026-06-27",
+  // custody end lives on the accused row (c2-a1) per V4-DELTA §2 — no case-level dup
   firstPrFiledDate: "2026-06-15",
   prFiledMonths: ["2026-06"],
   sanctionStatutory: "pending",

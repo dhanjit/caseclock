@@ -35,6 +35,8 @@ interface CioState {
   add: (name: string, rank?: string) => Promise<void>;
   update: (id: string, patch: Partial<Pick<CioRecord, "name" | "rank">>) => Promise<void>;
   remove: (id: string) => Promise<void>;
+  /** Idempotent merge of fixed-id records (demo seed). */
+  importRecords: (recs: CioRecord[]) => Promise<void>;
   /** Re-rank: move the officer at index i by dir (-1 up / +1 down). */
   move: (index: number, dir: -1 | 1) => Promise<void>;
   getById: (id: string | null | undefined) => CioRecord | undefined;
@@ -60,6 +62,16 @@ export const useCio = create<CioState>((set, get) => ({
   },
   async remove(id) {
     const officers = get().officers.filter((o) => o.id !== id);
+    await write(officers);
+    set({ officers });
+  },
+  async importRecords(recs) {
+    // Idempotent merge by id — used by the demo-data loader (fixed seed ids so
+    // sample cases can reference their CIO).
+    const cur = get().officers;
+    const missing = recs.filter((r) => !cur.some((o) => o.id === r.id));
+    if (!missing.length) return;
+    const officers = [...cur, ...missing];
     await write(officers);
     set({ officers });
   },

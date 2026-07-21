@@ -194,6 +194,12 @@ current-month-only PR check.
 
 ## 7. Build order (green-lit sequence)
 
+> **Status 2026-07-21: T1 SHIPPED** (branch `claude/casetrack-html-review-5decb1`,
+> commits `5d199df`→`212c2f3`): schema/domain, engine rewires + 4 new rules,
+> integrity checks, normNum search, reference refresh, extended seed, ledger
+> design system, and all T1 screens — 267 tests + typecheck green, flows
+> verified in the browser. T2/T3 below remain.
+
 1. **T1 — spines** (schema migration + low-risk extensions): chargesheet
    register · per-accused arrest/bail · conviction + appeal (Q3/Q7) · integrity
    panel · priority cap · reference refresh · search upgrades · rule-parameter

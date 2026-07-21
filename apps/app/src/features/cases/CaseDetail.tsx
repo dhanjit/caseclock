@@ -8,12 +8,15 @@ import {
   DEFAULT_SETTINGS,
   type CaseRecord,
   type ChargesheetRecord,
+  type CommsRequestRecord,
+  type CustodyMovementRecord,
   type DeadlineEvent,
   type EvidenceRecord,
   type HearingRecord,
   type PersonRecord,
   type ProcessRequestRecord,
   type SupervisionEntryRecord,
+  type TowerDumpRecord,
 } from "@/domain/types";
 import { newId } from "@/lib/id";
 import { fmtDate, relativeDays, severityTone, toneText } from "@/lib/format";
@@ -23,6 +26,9 @@ import { TopBar, btn } from "@/features/components/TopBar";
 import { CaseFile } from "./CaseFile";
 import { AccusedPanel } from "./AccusedPanel";
 import { InvestigationPanel } from "./InvestigationPanel";
+import { PipelinePanel } from "./PipelinePanel";
+import { CommsPanel } from "./CommsPanel";
+import { CustodyLedgerPanel } from "./CustodyLedgerPanel";
 import { TrialPanel } from "./TrialPanel";
 import { HearingsPanel } from "./HearingsPanel";
 import { EvidencePanel } from "./EvidencePanel";
@@ -156,6 +162,15 @@ export function CaseDetail({ id }: { id: string }) {
     // chargesheetFiledDate re-derives from the register on save (hydrateAggregate).
     await patch(id, (a) => ({ ...a, chargesheets, case: { ...a.case, lastTouchedAt: today } }));
   }
+  async function saveComms(commsRequests: CommsRequestRecord[]) {
+    await patch(id, (a) => ({ ...a, commsRequests, case: { ...a.case, lastTouchedAt: today } }));
+  }
+  async function saveTowers(towerDumps: TowerDumpRecord[]) {
+    await patch(id, (a) => ({ ...a, towerDumps, case: { ...a.case, lastTouchedAt: today } }));
+  }
+  async function saveMovements(custodyMovements: CustodyMovementRecord[]) {
+    await patch(id, (a) => ({ ...a, custodyMovements, case: { ...a.case, lastTouchedAt: today } }));
+  }
   async function togglePriority() {
     if (!agg) return;
     const { blocked } = await setPriority(id, !agg.case.priority);
@@ -280,11 +295,14 @@ export function CaseDetail({ id }: { id: string }) {
 
       {/* The two engines: investigation (FR/PR/custody) + court-trial (timeline + hearings) */}
       <InvestigationPanel agg={agg} onSaveCase={saveCase} />
+      <PipelinePanel agg={agg} onSaveCase={saveCase} />
       <TrialPanel agg={agg} onSaveCase={saveCase} />
       <HearingsPanel agg={agg} onSaveHearings={saveHearings} />
 
-      {/* Phase 3 panels: evidence·sanctions·place·reference laws */}
+      {/* Phase 3 + T2 panels: evidence·custody ledger·comms·sanctions·place·reference */}
       <EvidencePanel agg={agg} onSaveEvidence={saveEvidence} />
+      <CustodyLedgerPanel agg={agg} onSaveMovements={saveMovements} />
+      <CommsPanel agg={agg} onSaveComms={saveComms} onSaveTowers={saveTowers} />
       <RequestsPanel agg={agg} onSaveRequests={saveRequests} />
       <SanctionsPanel agg={agg} onSaveCase={saveCase} />
       <PlacePanel agg={agg} onSaveCase={saveCase} />

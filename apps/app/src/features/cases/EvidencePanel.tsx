@@ -1,9 +1,11 @@
 /** Evidence ↔ report mapping + No. of witnesses (REQUIREMENTS §5 / heading 9).
- * Expert reports carry a forwarding date that drives the §4.1 2-day auto-alert. */
+ * Expert reports carry a forwarding date that drives the 7-day auto-alert
+ * (V4-DELTA Q1). Receiving a report offers an observation (V4-DELTA N5):
+ * High-flagged remarks rise to the top and enter the briefing note. */
 
 import { useState } from "react";
 import type { CaseAggregate } from "@/domain/repository";
-import type { EvidenceRecord } from "@/domain/types";
+import type { EvidenceObservation, EvidenceRecord } from "@/domain/types";
 import { todayISO } from "@/rules/dates";
 import { newId } from "@/lib/id";
 import { fmtDate } from "@/lib/format";
@@ -31,7 +33,12 @@ export function EvidencePanel({
   const [witnesses, setWitnesses] = useState("");
   const [expert, setExpert] = useState(false);
   const [forwarded, setForwarded] = useState("");
+  const [exhibitNo, setExhibitNo] = useState("");
   const [busy, setBusy] = useState(false);
+  // Observation composer (V4-DELTA N5) — opened on receipt or via "+ observation".
+  const [obsFor, setObsFor] = useState<string | null>(null);
+  const [obsText, setObsText] = useState("");
+  const [obsFlag, setObsFlag] = useState<EvidenceObservation["flag"]>("normal");
 
   async function add() {
     if (!desc.trim() || busy) return;
@@ -45,6 +52,7 @@ export function EvidencePanel({
       witnesses: witnesses ? Number(witnesses) : null,
       reportKind: expert ? "expert" : "other",
       forwardedDate: forwarded || null,
+      exhibitNo: exhibitNo.trim() || undefined,
     };
     try {
       await onSaveEvidence([...evidence, e]);
@@ -53,6 +61,7 @@ export function EvidencePanel({
       setWitnesses("");
       setExpert(false);
       setForwarded("");
+      setExhibitNo("");
     } finally {
       setBusy(false);
     }
@@ -60,9 +69,30 @@ export function EvidencePanel({
   const update = (id: string, patch: Partial<EvidenceRecord>) =>
     onSaveEvidence(evidence.map((e) => (e.id === id ? { ...e, ...patch } : e)));
   const remove = (id: string) => onSaveEvidence(evidence.filter((e) => e.id !== id));
-  // Marking received stamps the receipt date and clears the alert (§4.1).
-  const toggleStatus = (e: EvidenceRecord) =>
-    update(e.id, e.status === "pending" ? { status: "received", receivedDate: today } : { status: "pending", receivedDate: null });
+  // Marking received stamps the receipt date, clears the alert, and offers the
+  // officer's observation on the report (V4-DELTA N5).
+  const toggleStatus = (e: EvidenceRecord) => {
+    if (e.status === "pending") {
+      void update(e.id, { status: "received", receivedDate: today });
+      setObsFor(e.id);
+      setObsText("");
+      setObsFlag("normal");
+    } else {
+      void update(e.id, { status: "pending", receivedDate: null });
+    }
+  };
+  const saveObservation = (e: EvidenceRecord) => {
+    if (obsText.trim()) {
+      void update(e.id, {
+        observations: [...(e.observations ?? []), { id: newId("obs"), date: today, flag: obsFlag, text: obsText.trim() }],
+      });
+    }
+    setObsFor(null);
+    setObsText("");
+    setObsFlag("normal");
+  };
+  const setObsFlagOn = (e: EvidenceRecord, obsId: string, flag: EvidenceObservation["flag"]) =>
+    update(e.id, { observations: (e.observations ?? []).map((o) => (o.id === obsId ? { ...o, flag } : o)) });
   const totalWitnesses = evidence.reduce((n, e) => n + (e.witnesses ?? 0), 0);
   const overdueCount = evidence.filter((e) => expertReportOverdue(e, today)).length;
 
@@ -75,10 +105,14 @@ export function EvidencePanel({
       <div className="space-y-1.5">
         {evidence.map((e) => {
           const overdue = expertReportOverdue(e, today);
+          const obs = [...(e.observations ?? [])].sort((a, b) => (a.flag === "high" ? -1 : 1) - (b.flag === "high" ? -1 : 1));
+          const hasHigh = obs.some((o) => o.flag === "high");
           return (
             <div key={e.id} className={`rounded-xl p-2.5 text-sm ${overdue ? "bg-critical/10 ring-1 ring-critical/40" : "bg-surface-3/40"}`}>
               <div className="flex items-center gap-2">
+                {e.exhibitNo && <span className="shrink-0 font-mono text-xs font-bold">{e.exhibitNo}</span>}
                 <span className="min-w-0 flex-1 text-ink"><Highlighted text={e.description} /></span>
+                {hasHigh && <span title="High-flagged observation" className="shrink-0 text-xs">⭐</span>}
                 {overdue && (
                   <span className="shrink-0 rounded border border-critical/50 bg-critical/15 px-1.5 py-0.5 text-[10px] font-semibold text-critical">
                     REPORT OVERDUE
@@ -107,13 +141,57 @@ export function EvidencePanel({
                   {e.status}
                 </button>
               </div>
+              {obs.length > 0 && (
+                <ul className="mt-1.5 space-y-1 border-t border-line/40 pt-1.5">
+                  {obs.map((o) => (
+                    <li key={o.id} className={`flex items-start gap-2 rounded px-2 py-1 text-xs ${o.flag === "high" ? "bg-red-bg/60" : "bg-surface-2"}`}>
+                      <button
+                        onClick={() => void setObsFlagOn(e, o.id, o.flag === "high" ? "normal" : "high")}
+                        title={o.flag === "high" ? "High — tap to set Normal" : "Normal — tap to flag High (enters the briefing note)"}
+                        className="shrink-0"
+                      >
+                        {o.flag === "high" ? "⭐" : "📝"}
+                      </button>
+                      <span className="min-w-0 flex-1 leading-snug">{o.text}</span>
+                      <span className="shrink-0 font-mono text-[10px] text-ink-dim">{fmtDate(o.date)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {obsFor === e.id ? (
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5 border-t border-line/40 pt-1.5">
+                  <input
+                    className={`${input} min-w-44 flex-1 py-1 text-xs`}
+                    value={obsText}
+                    onChange={(ev) => setObsText(ev.target.value)}
+                    onKeyDown={(ev) => ev.key === "Enter" && saveObservation(e)}
+                    placeholder="Your observation on this report (what it proves / what to do)…"
+                    autoFocus
+                  />
+                  <select value={obsFlag} onChange={(ev) => setObsFlag(ev.target.value as EvidenceObservation["flag"])} className={`${input} py-1 text-xs`} aria-label="Observation importance">
+                    <option value="normal">● Normal</option>
+                    <option value="high">⭐ High</option>
+                  </select>
+                  <button onClick={() => saveObservation(e)} className="rounded bg-ink px-2 py-1 font-mono text-[11px] text-surface">Save</button>
+                  <button onClick={() => setObsFor(null)} className="rounded border border-line px-2 py-1 font-mono text-[11px]">Skip</button>
+                </div>
+              ) : (
+                e.status === "received" && (
+                  <button onClick={() => { setObsFor(e.id); setObsText(""); setObsFlag("normal"); }} className="mt-1 text-[11px] text-court">
+                    + observation
+                  </button>
+                )
+              )}
             </div>
           );
         })}
         {evidence.length === 0 && <p className="py-2 text-center text-sm text-soft">No evidence logged</p>}
       </div>
       <div className="mt-3 space-y-2 border-t border-line pt-3">
-        <input className={`${input} w-full`} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Evidence (e.g. seized AK-47 rifles)" />
+        <div className="flex gap-2">
+          <input className={`${input} w-24`} value={exhibitNo} onChange={(e) => setExhibitNo(e.target.value)} placeholder="Exhibit no." />
+          <input className={`${input} flex-1`} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Evidence (e.g. seized AK-47 rifles)" />
+        </div>
         <div className="flex flex-wrap gap-2">
           <input className={`${input} flex-1`} value={report} onChange={(e) => setReport(e.target.value)} placeholder="Report to obtain (e.g. FSL ballistics)" />
           <input className={`${input} w-24`} value={witnesses} onChange={(e) => setWitnesses(e.target.value)} inputMode="numeric" placeholder="witnesses" />
@@ -122,7 +200,7 @@ export function EvidencePanel({
         <div className="flex flex-wrap items-center gap-3 text-xs text-ink-dim">
           <label className="flex items-center gap-1.5">
             <input type="checkbox" checked={expert} onChange={(e) => setExpert(e.target.checked)} />
-            Expert report (FSL / ballistic / device imaging — 2-day alert)
+            Expert report (FSL / ballistic / device imaging — 7-day alert)
           </label>
           {expert && (
             <label className="flex items-center gap-1.5">

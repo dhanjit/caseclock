@@ -14,6 +14,7 @@ import { MindMap } from "@/features/cases/MindMap";
 import { SearchView } from "@/features/search/SearchView";
 import { ReviewView } from "@/features/review/ReviewView";
 import { CioView } from "@/features/cio/CioView";
+import { LinksView } from "@/features/links/LinksView";
 import { SettingsView } from "@/features/settings/SettingsView";
 import { useSession } from "@/state/session";
 import { useNav } from "@/state/nav";
@@ -41,6 +42,8 @@ function Shell() {
       return <ReviewView />;
     case "cio":
       return <CioView />;
+    case "links":
+      return <LinksView />;
     case "settings":
       return <SettingsView />;
     default:

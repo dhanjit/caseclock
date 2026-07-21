@@ -8,6 +8,7 @@ export type View =
   | { kind: "search"; q?: string }
   | { kind: "review" }
   | { kind: "cio" }
+  | { kind: "links" }
   | { kind: "settings" };
 
 interface NavState {

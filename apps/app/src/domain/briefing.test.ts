@@ -14,13 +14,17 @@ const TODAY = "2026-06-27"; // ~ the fixtures' 26 Jun 2026 reference date
 const cases = sampleAggregates();
 const byId = (id: string) => cases.find((a) => a.case.id === id)!;
 
-/** The 13 fixed headings in CaseFile.tsx order, with byte-identical titles. */
-const EXPECTED_TITLES: [number, string][] = [
+/** The 13 fixed headings + V7 docket sub-headings in CaseFile.tsx order. */
+const EXPECTED_TITLES: [number | string, string][] = [
   [1, "Case number"],
+  ["1.1", "Original FIR"],
   [2, "Identity of the case"],
   [3, "Sections of law"],
   [4, "Date of occurrence"],
   [5, "Date of registration"],
+  ["5.1", "Name of CIO"],
+  ["5.2", "Name & address of complainant"],
+  ["5.3", "Name of the trial court"],
   [6, "Brief of the case"],
   [7, "Number of accused"],
   [8, "Progress of investigation"],
@@ -31,14 +35,15 @@ const EXPECTED_TITLES: [number, string][] = [
   [13, "Plan of action"],
 ];
 
-const headingByNo = (b: BriefingNote, n: number) => b.headings.find((h) => h.n === n)!;
+const headingByNo = (b: BriefingNote, n: number | string) => b.headings.find((h) => h.n === n)!;
 
-describe("buildBriefing — 13 headings, exact order + titles", () => {
+describe("buildBriefing — heading order + titles (13 + V7 sub-headings + registers)", () => {
   for (const id of ["case-sample-1", "case-sample-2"]) {
-    it(`${id}: exactly 13 headings in order with exact titles`, () => {
+    it(`${id}: the 17 numbered headings lead, in order with exact titles`, () => {
       const b = buildBriefing(byId(id), TODAY);
-      expect(b.headings).toHaveLength(13);
-      expect(b.headings.map((h) => [h.n, h.title])).toEqual(EXPECTED_TITLES);
+      expect(b.headings.slice(0, EXPECTED_TITLES.length).map((h) => [h.n, h.title])).toEqual(EXPECTED_TITLES);
+      // Appended registers: both samples carry comms data; case 1 also chargesheets.
+      expect(b.headings.some((h) => h.n === "CD")).toBe(true);
     });
   }
 });
@@ -46,8 +51,19 @@ describe("buildBriefing — 13 headings, exact order + titles", () => {
 describe("Case 1 — NIA 04/2024 rollups", () => {
   const b = () => buildBriefing(byId("case-sample-1"), TODAY);
 
-  it("#7 number of accused = 5", () => {
-    expect(headingByNo(b(), 7).lines).toEqual(["5"]);
+  it("#7 status-count table: total 5 with the V6 breakdown", () => {
+    const lines = headingByNo(b(), 7).lines;
+    expect(lines[0]).toBe("Total: 5");
+    expect(lines).toContain("Absconder: 1");
+    expect(lines).toContain("Under investigation: 1");
+  });
+
+  it("chargesheet register + High observation reach the note", () => {
+    const cs = headingByNo(b(), "CS").lines;
+    expect(cs).toHaveLength(2);
+    expect(cs[0]).toMatch(/Main \(CS-1\).*Jahnabi Boro/);
+    expect(headingByNo(b(), 9).lines.some((l) => l.startsWith("★ M-1"))).toBe(true);
+    expect(headingByNo(b(), 9).lines.some((l) => l.includes("OUT (M-3)"))).toBe(true);
   });
 
   it("#9 evidence summary counts items/received/witnesses and the 1 overdue expert report", () => {
@@ -82,8 +98,17 @@ describe("Case 1 — NIA 04/2024 rollups", () => {
 describe("Case 2 — Case 21/2026 rollups", () => {
   const b = () => buildBriefing(byId("case-sample-2"), TODAY);
 
-  it("#7 number of accused = 3", () => {
-    expect(headingByNo(b(), 7).lines).toEqual(["3"]);
+  it("#7 status-count table: total 3, all arrested", () => {
+    const lines = headingByNo(b(), 7).lines;
+    expect(lines[0]).toBe("Total: 3");
+    expect(lines).toContain("Arrested (PC + JC): 3");
+  });
+
+  it("comms register lines carry received counts; the seal-broken leg flags in #9", () => {
+    const cd = headingByNo(b(), "CD").lines;
+    expect(cd.some((l) => l.match(/CDR .*recd 1\/3/))).toBe(true);
+    expect(cd.some((l) => l.startsWith("Tower "))).toBe(true);
+    expect(headingByNo(b(), 9).lines.some((l) => l.includes("SEAL BROKEN on E-2"))).toBe(true);
   });
 
   it("#9 flags the overdue passport-forgery expert report (but not the just-forwarded FICN one)", () => {
@@ -171,13 +196,14 @@ describe("minimal-aggregate edge", () => {
       // evidence + processRequests intentionally undefined
     };
     const b = buildBriefing(agg, TODAY);
-    expect(b.headings).toHaveLength(13);
+    expect(b.headings).toHaveLength(EXPECTED_TITLES.length); // no registers on a bare case
     expect(b.headings.map((h) => [h.n, h.title])).toEqual(EXPECTED_TITLES);
     // Derived rollups fall back to em-dash.
     expect(headingByNo(b, 9).lines).toEqual(["—"]);
+    expect(headingByNo(b, "5.1").lines).toEqual(["—"]);
     expect(headingByNo(b, 11).lines).toEqual(["—"]);
     expect(headingByNo(b, 12).lines).toEqual(["—"]);
-    expect(headingByNo(b, 7).lines).toEqual(["0"]);
+    expect(headingByNo(b, 7).lines).toEqual(["Total: 0"]);
     // Free-text headings fall back to em-dash too.
     expect(headingByNo(b, 6).lines).toEqual(["—"]);
     expect(b.header.identity).toBe("—");

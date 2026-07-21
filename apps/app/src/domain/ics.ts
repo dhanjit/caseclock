@@ -175,6 +175,7 @@ function deadlineEvents(agg: CaseAggregate, settings: Settings, today: ISODate):
     agg.processRequests ?? [],
     agg.commsRequests ?? [],
     agg.towerDumps ?? [],
+    agg.chargesheets ?? [],
   );
   const out: IcsEvent[] = [];
   for (const d of deadlines) {

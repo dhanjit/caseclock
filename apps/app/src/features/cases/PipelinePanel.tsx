@@ -77,9 +77,19 @@ export function PipelinePanel({
             >
               <p className="text-[11px] font-semibold leading-tight">{s.label}</p>
               {s.date ? (
-                <p className="mt-1 inline-block rounded bg-green-bg px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-ok">
-                  {fmtDate(s.date)}
-                </p>
+                <span className="mt-1 flex items-center gap-1.5">
+                  <span className="inline-block rounded bg-green-bg px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-ok">
+                    {fmtDate(s.date)}
+                  </span>
+                  <input
+                    type="date"
+                    className="w-6 cursor-pointer opacity-40 hover:opacity-100"
+                    value={s.date}
+                    onChange={(e) => void onSaveCase({ [s.key]: e.target.value || null } as Partial<CaseRecord>)}
+                    aria-label={`Correct ${s.label} date`}
+                    title="Correct this date"
+                  />
+                </span>
               ) : (
                 <>
                   {s.due && (

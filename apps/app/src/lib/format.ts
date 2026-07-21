@@ -8,14 +8,15 @@ export function caseLabel(c: Pick<CaseRecord, "firNumber" | "policeStation" | "i
   return c.identity ? `${head} — ${c.identity}` : head;
 }
 
-/** Investigation-vs-trial tag (§4) shown on every deadline. */
+/** Investigation-vs-trial tag (§4) shown on every deadline. Light-ledger tones —
+ * the dark-theme -300 tints measured 1.04–1.28:1 contrast on paper (review fix). */
 export const TRACK_META: Record<DeadlineTrack, { short: string; pill: string }> = {
-  investigation: { short: "INV", pill: "bg-amber-500/15 text-amber-300 border-amber-500/30" },
+  investigation: { short: "INV", pill: "bg-amber-100 text-amber-900 border-amber-700/30" },
   trial: { short: "TRIAL", pill: "bg-court/15 text-court border-court/30" },
-  court: { short: "COURT", pill: "bg-slate-500/15 text-slate-300 border-slate-500/30" },
+  court: { short: "COURT", pill: "bg-slate-200 text-slate-700 border-slate-400/40" },
   superior: { short: "SC/HC", pill: "bg-critical/15 text-critical border-critical/40" },
   supervisory: { short: "SUPV", pill: "bg-soft/15 text-soft border-soft/30" },
-  process: { short: "REQ", pill: "bg-violet-500/15 text-violet-300 border-violet-500/30" },
+  process: { short: "REQ", pill: "bg-violet-100 text-violet-900 border-violet-700/30" },
 };
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

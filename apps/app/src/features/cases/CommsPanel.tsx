@@ -27,8 +27,8 @@ export function CommsPanel({
   onSaveTowers,
 }: {
   agg: CaseAggregate;
-  onSaveComms: (rows: CommsRequestRecord[]) => Promise<void>;
-  onSaveTowers: (rows: TowerDumpRecord[]) => Promise<void>;
+  onSaveComms: (rows: CommsRequestRecord[] | ((prev: CommsRequestRecord[]) => CommsRequestRecord[])) => Promise<void>;
+  onSaveTowers: (rows: TowerDumpRecord[] | ((prev: TowerDumpRecord[]) => TowerDumpRecord[])) => Promise<void>;
 }) {
   const rows = agg.commsRequests ?? [];
   const towers = agg.towerDumps ?? [];
@@ -53,7 +53,7 @@ export function CommsPanel({
           kind={kind}
           rows={rows.filter((r) => r.kind === kind)}
           today={today}
-          onChange={(next) => onSaveComms([...rows.filter((r) => r.kind !== kind), ...next])}
+          onChange={(fn) => onSaveComms((prev) => [...prev.filter((r) => r.kind !== kind), ...fn(prev.filter((r) => r.kind === kind))])}
           caseId={agg.case.id}
         />
       ))}
@@ -73,7 +73,7 @@ function CommsRegister({
   rows: CommsRequestRecord[];
   today: string;
   caseId: string;
-  onChange: (rows: CommsRequestRecord[]) => Promise<void>;
+  onChange: (fn: (prevKindRows: CommsRequestRecord[]) => CommsRequestRecord[]) => Promise<void>;
 }) {
   const [ref, setRef] = useState("");
   const [nums, setNums] = useState("");
@@ -83,8 +83,8 @@ function CommsRegister({
 
   async function add() {
     if (!ref.trim()) return;
-    await onChange([
-      ...rows,
+    await onChange((prev) => [
+      ...prev,
       {
         id: newId(kind),
         caseId,
@@ -100,7 +100,7 @@ function CommsRegister({
     setExpected("");
   }
   const update = (id: string, patch: Partial<CommsRequestRecord>) =>
-    onChange(rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    onChange((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
 
   return (
     <div className="mb-3">
@@ -155,7 +155,8 @@ function CommsRegister({
                             void update(r.id, { receivedCount: Math.min(Math.max(0, Number(recdVal) || 0), r.numbers.length) });
                             setEditRecd(null);
                           }}
-                          className="rounded bg-ink px-1.5 py-0.5 font-mono text-[10px] text-surface"
+                          className="rounded bg-ink px-2.5 py-1.5 font-mono text-[11px] text-surface"
+                          aria-label="Save received count"
                         >
                           ✓
                         </button>
@@ -164,7 +165,8 @@ function CommsRegister({
                       pend > 0 && (
                         <button
                           onClick={() => { setEditRecd(r.id); setRecdVal(String(r.receivedCount)); }}
-                          className="rounded border border-line px-1.5 py-0.5 font-mono text-[10px] text-court"
+                          className="rounded border border-line px-2.5 py-1.5 font-mono text-[11px] text-court"
+                          aria-label="Update received count"
                         >
                           recd
                         </button>
@@ -196,7 +198,7 @@ function TowerRegister({
   towers: TowerDumpRecord[];
   today: string;
   caseId: string;
-  onChange: (rows: TowerDumpRecord[]) => Promise<void>;
+  onChange: (rows: TowerDumpRecord[] | ((prev: TowerDumpRecord[]) => TowerDumpRecord[])) => Promise<void>;
 }) {
   const [ref, setRef] = useState("");
   const [site, setSite] = useState("");
@@ -205,14 +207,14 @@ function TowerRegister({
 
   async function add() {
     if (!ref.trim()) return;
-    await onChange([
-      ...towers,
+    await onChange((prev) => [
+      ...prev,
       { id: newId("tw"), caseId, ref: ref.trim(), site: site.trim() || undefined, timeWindow: win.trim() || undefined, status: "pending", expectedDate: expected || addDays(today, 15) },
     ]);
     setRef(""); setSite(""); setWin(""); setExpected("");
   }
   const toggle = (id: string) =>
-    onChange(towers.map((t) => (t.id === id ? { ...t, status: t.status === "received" ? "pending" : "received" } : t)));
+    onChange((prev) => prev.map((t) => (t.id === id ? { ...t, status: t.status === "received" ? "pending" : "received" } : t)));
 
   return (
     <div>
@@ -245,7 +247,7 @@ function TowerRegister({
                     </span>
                   </td>
                   <td className="px-2.5 py-1.5 text-right">
-                    <button onClick={() => void toggle(t.id)} className="rounded border border-line px-1.5 py-0.5 font-mono text-[10px] text-court">
+                    <button onClick={() => void toggle(t.id)} className="rounded border border-line px-2.5 py-1.5 font-mono text-[11px] text-court" aria-label={t.status === "received" ? "Mark pending again" : "Mark received"}>
                       {t.status === "received" ? "undo" : "recd"}
                     </button>
                   </td>

@@ -33,7 +33,10 @@ function Shell() {
     case "new":
       return <CaseWizard />;
     case "case":
-      return <CaseDetail id={view.id} />;
+      // key: switching cases MUST remount the detail tree — otherwise panel edit
+      // buffers survive the switch and save case A's content into case B
+      // (review finding, live-reproduced).
+      return <CaseDetail key={view.id} id={view.id} />;
     case "mindmap":
       return <MindMap id={view.id} />;
     case "search":

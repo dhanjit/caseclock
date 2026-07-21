@@ -11,6 +11,7 @@ import { todayISO } from "@/rules/dates";
 import { newId } from "@/lib/id";
 import { fmtDate } from "@/lib/format";
 import { Section } from "@/features/components/bits";
+import { DeferredTextarea } from "@/features/components/DeferredInput";
 import { btn } from "@/features/components/TopBar";
 
 const input = "rounded-xl border border-line bg-surface-2 px-3 py-2 text-sm text-ink outline-none focus:border-court";
@@ -90,11 +91,12 @@ export function SanctionsPanel({
         <DateField label="Rule 4 sanction" value={c.rule4SanctionDate ?? ""} onChange={(v) => onSaveCase({ rule4SanctionDate: v || null })} />
       </div>
 
-      <textarea
+      <DeferredTextarea
         className={`${input} mt-2 w-full min-h-[48px] resize-y`}
         value={c.sanctionNote ?? ""}
-        onChange={(e) => onSaveCase({ sanctionNote: e.target.value || undefined })}
+        onCommit={(v) => onSaveCase({ sanctionNote: v || undefined })}
         placeholder="Sanction notes (authority, file ref, dates…)"
+        aria-label="Sanction notes"
       />
     </Section>
   );

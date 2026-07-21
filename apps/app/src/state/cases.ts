@@ -81,6 +81,11 @@ export const useCases = create<CasesState>((set, get) => ({
 
   async remove(id) {
     await enqueue(async () => {
+      // V7-9 / Q4 edit-only: recorded cases cannot be deleted — only sample/demo
+      // cases can. (The officer's prototype: "Cases you have entered are
+      // edit-only and cannot be deleted.")
+      const cur = get().aggregates.find((a) => a.case.id === id);
+      if (cur && !cur.case.demo) return;
       await repo().remove(id);
       set({ aggregates: await repo().list() });
     });

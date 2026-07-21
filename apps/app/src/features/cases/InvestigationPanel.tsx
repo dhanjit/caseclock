@@ -54,6 +54,33 @@ export function InvestigationPanel({
   const [lifeOrDeath, setLifeOrDeath] = useState(!!c.lifeOrDeath);
   const isUapa = lim.caseType === "uapa";
 
+  // Re-seed the buffer from the CURRENT aggregate every time edit opens — the
+  // mount-time snapshot goes stale as other panels (esp. PipelinePanel, which
+  // writes the same dates) save; saving a stale buffer nulled recorded dates
+  // (review finding, live-reproduced).
+  function startEdit() {
+    setArrest(c.arrestDate ?? "");
+    setCaseType(c.custodyCaseType ?? "");
+    setUapaDays(c.uapaCustodyDays?.toString() ?? "");
+    setCustodyEnd(c.custodyEndDate ?? "");
+    setCsFiled(c.chargesheetFiledDate ?? "");
+    setFrI(c.frISubmittedDate ?? "");
+    setFrII(c.frIIFiledDate ?? "");
+    setSpRemarks(c.spRemarksDate ?? "");
+    setDgApproved(c.dgApprovedDate ?? c.dgOrderDate ?? "");
+    setIrMha(c.irForMhaDate ?? "");
+    setMhaSanction(c.mhaSanctionDate ?? "");
+    setCustodyExt(c.custodyExtFiledDate ?? "");
+    setFirstPr(c.firstPrFiledDate ?? "");
+    setFirstRemand(c.firstRemandDate ?? "");
+    setCustodyStatus(c.custodyStatus ?? "");
+    setPpReport(c.uapaPpReportFiledDate ?? "");
+    setUapaExt(!!c.uapaExtensionGranted);
+    setMaxSentence(c.maxSentenceYears?.toString() ?? "");
+    setLifeOrDeath(!!c.lifeOrDeath);
+    setEditing(true);
+  }
+
   async function save() {
     setBusy(true);
     try {
@@ -233,7 +260,7 @@ export function InvestigationPanel({
         </div>
       </div>
       <div className="mt-3 flex justify-end gap-2">
-        <button onClick={() => setEditing(true)} className={btn("ghost")}>Edit dates</button>
+        <button onClick={startEdit} className={btn("ghost")}>Edit dates</button>
       </div>
     </Section>
   );

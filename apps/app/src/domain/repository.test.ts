@@ -113,6 +113,50 @@ describe("hydrateAggregate (V4-DELTA §6 JSON-level migrations)", () => {
     expect(h.persons.find((x) => x.id === "a3")!.arrestDate).toBe("2025-05-03");
   });
 
+  it("legacy migrations run ONCE: a cleared DG date stays cleared after save (review fix)", async () => {
+    const db = new MemoryDbClient();
+    await db.createVault("x");
+    const repo = new CaseRepository(db);
+    const agg = uapaCase();
+    agg.case.dgOrderDate = "2025-06-10";
+    await repo.save(agg, 1000); // save persists hydrated → dgApproved copied, legacyMigrated stamped
+    let got = (await repo.get("case-47"))!;
+    expect(got.case.dgApprovedDate).toBe("2025-06-10");
+    expect(got.case.legacyMigrated).toBe(true);
+    // Officer deliberately clears the DG approval…
+    got = { ...got, case: { ...got.case, dgApprovedDate: null } };
+    await repo.save(got, 2000);
+    // …and it must NOT be resurrected from the legacy dgOrderDate.
+    expect((await repo.get("case-47"))!.case.dgApprovedDate).toBeNull();
+  });
+
+  it("cleared per-accused arrest dates stay cleared after the one-time copy-down", async () => {
+    const db = new MemoryDbClient();
+    await db.createVault("x");
+    const repo = new CaseRepository(db);
+    const agg = uapaCase();
+    agg.persons = [{ id: "a1", caseId: "case-47", role: "accused", name: "A-1", accusedStatus: "judicial_custody", arrestDate: null }];
+    await repo.save(agg, 1000); // copy-down runs once (case arrest 2025-05-01)
+    let got = (await repo.get("case-47"))!;
+    expect(got.persons[0].arrestDate).toBe("2025-05-01");
+    got = { ...got, persons: [{ ...got.persons[0], arrestDate: null }] };
+    await repo.save(got, 2000);
+    expect((await repo.get("case-47"))!.persons[0].arrestDate).toBeNull();
+  });
+
+  it("a legacy case-level chargesheet date becomes register row #1 (case-wide) — V4-DELTA §6", async () => {
+    const db = new MemoryDbClient();
+    await db.createVault("x");
+    const repo = new CaseRepository(db);
+    const agg = uapaCase();
+    agg.case.chargesheetFiledDate = "2025-09-04";
+    await repo.save(agg, 1000);
+    const got = (await repo.get("case-47"))!;
+    expect(got.chargesheets).toHaveLength(1);
+    expect(got.chargesheets![0]).toMatchObject({ kind: "main", date: "2025-09-04", accusedIds: [] });
+    expect(got.case.chargesheetFiledDate).toBe("2025-09-04");
+  });
+
   it("repository round-trips hydrated: register drives the stored derived date", async () => {
     const db = new MemoryDbClient();
     await db.createVault("x");

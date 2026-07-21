@@ -9,10 +9,19 @@
 
 import { useState } from "react";
 import type { CaseAggregate } from "@/domain/repository";
-import type { AccusedStatus, CustodyHistoryEntry, LocNotice, PersonRecord } from "@/domain/types";
+import {
+  custodyLimits,
+  uncoveredArrestedAccused,
+  type AccusedStatus,
+  type CustodyHistoryEntry,
+  type LocNotice,
+  type PersonRecord,
+} from "@/domain/types";
 import { ACCUSED_STATUS_META, ACCUSED_STATUS_ORDER, accusedStatusMeta } from "@/domain/accused";
+import { addDays, diffDays, todayISO } from "@/rules/dates";
 import { newId } from "@/lib/id";
 import { Section } from "@/features/components/bits";
+import { DeferredInput } from "@/features/components/DeferredInput";
 import { Highlighted } from "@/features/components/Highlighted";
 import { btn } from "@/features/components/TopBar";
 import { useWatchlist } from "@/state/watchlist";
@@ -26,10 +35,9 @@ export function AccusedPanel({
   onSavePersons,
 }: {
   agg: CaseAggregate;
-  onSavePersons: (persons: PersonRecord[]) => Promise<void>;
+  onSavePersons: (persons: PersonRecord[] | ((prev: PersonRecord[]) => PersonRecord[])) => Promise<void>;
 }) {
   const accused = agg.persons.filter((p) => p.role === "accused");
-  const others = agg.persons.filter((p) => p.role !== "accused");
   const watchAdd = useWatchlist((s) => s.add);
   const watchNames = useWatchlist((s) => s.names);
   const onWatch = (name: string) => watchNames.some((x) => x.toLowerCase() === name.toLowerCase());
@@ -41,10 +49,37 @@ export function AccusedPanel({
   const needsArrestDate = (s: AccusedStatus | undefined) =>
     s === "police_custody" || s === "judicial_custody" || s === "charge_sheeted";
 
-  async function commit(next: PersonRecord[]) {
+  // Per-accused FR countdown (V6 preview): shown while THIS accused's chargesheet
+  // is outstanding — coverage-aware, matching the engine's fr1 clock.
+  const today = todayISO();
+  const chargesheets = agg.chargesheets ?? [];
+  const uncoveredIds = new Set(uncoveredArrestedAccused(agg.persons, chargesheets).map((p) => p.id));
+  const frOpenFor = (p: PersonRecord) =>
+    !!p.arrestDate && (chargesheets.length > 0 ? uncoveredIds.has(p.id) : !agg.case.chargesheetFiledDate);
+  const frPill = (p: PersonRecord) => {
+    if (!frOpenFor(p)) return null;
+    const due = addDays(p.arrestDate!, custodyLimits(agg.case).buffered);
+    const past = diffDays(today, due);
+    return (
+      <span
+        title={`Chargesheet / FR target for ${p.name}: ${due}`}
+        className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] font-bold ${past > 0 ? "bg-critical text-white" : past > -16 ? "bg-brass-bg text-statutory" : "bg-blue-bg text-court"}`}
+      >
+        {past > 0 ? `FR overdue ${past}d` : `FR ${-past}d left`}
+      </span>
+    );
+  };
+
+  // Read-modify-write against the LATEST persons array (updater form) — building
+  // the next array from this render's props loses a prior quick edit
+  // (review finding, live-reproduced with two checkbox taps).
+  async function commit(fn: (accused: PersonRecord[]) => PersonRecord[]) {
     setBusy(true);
     try {
-      await onSavePersons([...others, ...next]);
+      await onSavePersons((prev) => {
+        const rest = prev.filter((p) => p.role !== "accused");
+        return [...rest, ...fn(prev.filter((p) => p.role === "accused"))];
+      });
     } finally {
       setBusy(false);
     }
@@ -59,24 +94,27 @@ export function AccusedPanel({
       accusedStatus: newStatus,
       arrestDate: newArrest || null,
     };
-    await commit([...accused, p]);
+    await commit((acc) => [...acc, p]);
     setNewName("");
     setNewStatus("not_arrested");
     setNewArrest("");
   }
   const update = (id: string, patch: Partial<PersonRecord>) =>
-    commit(accused.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+    commit((acc) => acc.map((p) => (p.id === id ? { ...p, ...patch } : p)));
 
-  const addLoc = (p: PersonRecord) => update(p.id, { loc: [...(p.loc ?? []), { id: newId("loc"), type: "LOC" }] });
+  // Sub-array edits compute from the LATEST row inside the updater, not render props.
+  const patchRow = (pid: string, fn: (x: PersonRecord) => Partial<PersonRecord>) =>
+    commit((acc) => acc.map((x) => (x.id === pid ? { ...x, ...fn(x) } : x)));
+  const addLoc = (p: PersonRecord) => patchRow(p.id, (x) => ({ loc: [...(x.loc ?? []), { id: newId("loc"), type: "LOC" }] }));
   const updLoc = (p: PersonRecord, id: string, patch: Partial<LocNotice>) =>
-    update(p.id, { loc: (p.loc ?? []).map((l) => (l.id === id ? { ...l, ...patch } : l)) });
-  const delLoc = (p: PersonRecord, id: string) => update(p.id, { loc: (p.loc ?? []).filter((l) => l.id !== id) });
+    patchRow(p.id, (x) => ({ loc: (x.loc ?? []).map((l) => (l.id === id ? { ...l, ...patch } : l)) }));
+  const delLoc = (p: PersonRecord, id: string) => patchRow(p.id, (x) => ({ loc: (x.loc ?? []).filter((l) => l.id !== id) }));
   const addCustody = (p: PersonRecord) =>
-    update(p.id, { custodyHistory: [...(p.custodyHistory ?? []), { id: newId("ch"), kind: "judicial" }] });
+    patchRow(p.id, (x) => ({ custodyHistory: [...(x.custodyHistory ?? []), { id: newId("ch"), kind: "judicial" }] }));
   const updCustody = (p: PersonRecord, id: string, patch: Partial<CustodyHistoryEntry>) =>
-    update(p.id, { custodyHistory: (p.custodyHistory ?? []).map((h) => (h.id === id ? { ...h, ...patch } : h)) });
+    patchRow(p.id, (x) => ({ custodyHistory: (x.custodyHistory ?? []).map((h) => (h.id === id ? { ...h, ...patch } : h)) }));
   const delCustody = (p: PersonRecord, id: string) =>
-    update(p.id, { custodyHistory: (p.custodyHistory ?? []).filter((h) => h.id !== id) });
+    patchRow(p.id, (x) => ({ custodyHistory: (x.custodyHistory ?? []).filter((h) => h.id !== id) }));
 
   return (
     <Section title="Accused" hint={`${accused.length} · 12-status · edit-only`} className="mt-3">
@@ -92,6 +130,7 @@ export function AccusedPanel({
               <span className="min-w-0 flex-1 truncate text-sm text-ink">
                 <Highlighted text={p.name} />
               </span>
+              {frPill(p)}
               {((p.loc?.length ?? 0) > 0 || (p.custodyHistory?.length ?? 0) > 0) && (
                 <span className="shrink-0 text-[11px] text-soft">
                   {(p.loc?.length ?? 0) > 0 && `${p.loc!.length} LOC`}
@@ -99,7 +138,7 @@ export function AccusedPanel({
                 </span>
               )}
               {!onWatch(p.name) ? (
-                <button onClick={() => watchAdd(p.name)} className="text-xs text-soft hover:text-critical" title="Flag on watchlist (auto-RED everywhere)">
+                <button onClick={() => watchAdd(p.name)} className="px-1.5 py-1 text-xs text-soft hover:text-critical" title="Flag on watchlist (auto-RED everywhere)" aria-label={`Flag ${p.name} on the watchlist`}>
                   ⚑
                 </button>
               ) : (
@@ -171,10 +210,10 @@ export function AccusedPanel({
                   title="Bail hearing date — raises a BAIL deadline"
                 />
               )}
-              <input
+              <DeferredInput
                 className={`${input} min-w-36 flex-1 py-1`}
                 value={p.othersNote ?? ""}
-                onChange={(e) => update(p.id, { othersNote: e.target.value || undefined })}
+                onCommit={(v) => update(p.id, { othersNote: v || undefined })}
                 placeholder="Others — LOC / MLA / Interpol note"
                 aria-label={`${p.name} other notes`}
               />
@@ -187,11 +226,12 @@ export function AccusedPanel({
             {p.accusedStatus === "convicted" && (
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 rounded border-l-4 border-critical/60 bg-red-bg/60 px-2 py-1.5">
                 <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-critical">Convicted</span>
-                <input
+                <DeferredInput
                   className={`${input} min-w-40 flex-1 py-1`}
                   value={p.sentence ?? ""}
-                  onChange={(e) => update(p.id, { sentence: e.target.value || undefined })}
+                  onCommit={(v) => update(p.id, { sentence: v || undefined })}
                   placeholder="Sentence / quantum (e.g. life u/s 16 UAPA)"
+                  aria-label={`${p.name} sentence`}
                 />
                 <label className="flex items-center gap-1.5 text-xs text-ink-dim">
                   Sentenced
@@ -227,13 +267,13 @@ export function AccusedPanel({
                             <option key={t} value={t}>{t}</option>
                           ))}
                         </select>
-                        <input className={`${input} flex-1 py-1`} value={l.ref ?? ""} onChange={(e) => updLoc(p, l.id, { ref: e.target.value || undefined })} placeholder="ref / notice no." />
-                        <input className={`${input} w-28 py-1`} value={l.status ?? ""} onChange={(e) => updLoc(p, l.id, { status: e.target.value || undefined })} placeholder="status" />
-                        <button onClick={() => delLoc(p, l.id)} className="text-xs text-soft hover:text-critical">✕</button>
+                        <DeferredInput className={`${input} flex-1 py-1`} value={l.ref ?? ""} onCommit={(v) => updLoc(p, l.id, { ref: v || undefined })} placeholder="ref / notice no." aria-label="Notice reference" />
+                        <DeferredInput className={`${input} w-28 py-1`} value={l.status ?? ""} onCommit={(v) => updLoc(p, l.id, { status: v || undefined })} placeholder="status" aria-label="Notice status" />
+                        <button onClick={() => delLoc(p, l.id)} className="px-1.5 py-1 text-xs text-soft hover:text-critical" aria-label="Remove notice" title="Remove notice">✕</button>
                       </div>
                     ))}
                   </div>
-                  <button onClick={() => addLoc(p)} className="mt-1 text-xs text-court">+ notice</button>
+                  <button onClick={() => addLoc(p)} className="mt-1 rounded border border-line px-2.5 py-1.5 text-xs text-court">+ notice</button>
                 </div>
                 <div>
                   <p className="mb-1 text-[11px] uppercase tracking-wide text-soft">Custody history</p>
@@ -248,11 +288,11 @@ export function AccusedPanel({
                         <input type="date" className={`${input} py-1`} value={h.from ?? ""} onChange={(e) => updCustody(p, h.id, { from: e.target.value || null })} />
                         <span className="text-xs text-soft">→</span>
                         <input type="date" className={`${input} py-1`} value={h.to ?? ""} onChange={(e) => updCustody(p, h.id, { to: e.target.value || null })} />
-                        <button onClick={() => delCustody(p, h.id)} className="text-xs text-soft hover:text-critical">✕</button>
+                        <button onClick={() => delCustody(p, h.id)} className="px-1.5 py-1 text-xs text-soft hover:text-critical" aria-label="Remove custody spell" title="Remove custody spell">✕</button>
                       </div>
                     ))}
                   </div>
-                  <button onClick={() => addCustody(p)} className="mt-1 text-xs text-court">+ custody spell</button>
+                  <button onClick={() => addCustody(p)} className="mt-1 rounded border border-line px-2.5 py-1.5 text-xs text-court">+ custody spell</button>
                 </div>
               </div>
             )}

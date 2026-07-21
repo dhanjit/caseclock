@@ -82,6 +82,7 @@ export function buildAgenda(
       agg.processRequests ?? [],
       agg.commsRequests ?? [],
       agg.towerDumps ?? [],
+      agg.chargesheets ?? [],
     );
     for (const d of deadlines) {
       const bucket = bucketFor(d, today, horizon);

@@ -125,7 +125,7 @@ function textLines(v: string | null | undefined): string[] {
   return v && v.trim() ? [v] : [DASH];
 }
 
-export function buildBriefing(agg: CaseAggregate, today: ISODate, officers: CioRecord[] = []): BriefingNote {
+export function buildBriefing(agg: CaseAggregate, today: ISODate, officers: CioRecord[] = [], watchlist: string[] = []): BriefingNote {
   const c = agg.case;
   const accused = agg.persons.filter((p) => p.role === "accused");
   const cio = officers.find((o) => o.id === c.cioId);
@@ -145,6 +145,13 @@ export function buildBriefing(agg: CaseAggregate, today: ISODate, officers: CioR
     const names = cs.accusedIds.map((id) => accused.find((p) => p.id === id)?.name ?? id);
     return `${cs.kind === "main" ? "Main" : "Supplementary"} (CS-${i + 1}) — ${fmtDate(cs.date)}${cs.court ? ` — ${cs.court}` : ""}${names.length ? ` — ${names.join("; ")}` : ""}`;
   });
+  // Banned-orgs footer (V6 prints "BANNED ORGS FLAGGED: ..."): watchlist names
+  // that actually appear in this case's text/persons.
+  const corpus = [
+    c.identity, c.sectionsOfLaw, c.brief, c.investigationProgress, c.trialStatus, c.planOfAction,
+    ...agg.persons.map((p) => p.name),
+  ].filter(Boolean).join(" \n ").toLowerCase();
+  const flaggedWatchlist = watchlist.filter((w) => w.trim() && corpus.includes(w.trim().toLowerCase()));
   const commsLines = (agg.commsRequests ?? []).map(
     (r) => `${r.kind.toUpperCase()} ${r.ref}: ${r.numbers.join(", ") || "—"} (recd ${r.receivedCount}/${r.numbers.length})`,
   );
@@ -169,9 +176,7 @@ export function buildBriefing(agg: CaseAggregate, today: ISODate, officers: CioR
     {
       n: 7,
       title: "Number of accused",
-      lines: accusedStatusCounts(agg.persons)
-        .filter((r, i) => i === 0 || r.count > 0)
-        .map((r) => `${r.label}: ${r.count}`),
+      lines: accusedStatusCounts(agg.persons).map((r) => `${r.label}: ${r.count}`),
     },
     { n: 8, title: "Progress of investigation", lines: textLines(c.investigationProgress) },
     { n: 9, title: "Evidences collected", lines: evidenceLines(agg, today) },
@@ -186,6 +191,9 @@ export function buildBriefing(agg: CaseAggregate, today: ISODate, officers: CioR
     ...(csLines.length ? [{ n: "CS", title: "Chargesheet register", lines: csLines }] : []),
     ...(commsLines.length || towerLines.length
       ? [{ n: "CD", title: "Communication data (requests)", lines: [...commsLines, ...towerLines] }]
+      : []),
+    ...(flaggedWatchlist.length
+      ? [{ n: "⚑", title: "Banned orgs / watchlist flagged in this file", lines: [flaggedWatchlist.join(", ")] }]
       : []),
   ];
 

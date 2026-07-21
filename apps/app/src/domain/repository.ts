@@ -42,37 +42,64 @@ export function chargesheetFiled(agg: Pick<CaseAggregate, "case" | "chargesheets
 }
 
 /**
- * Normalize an aggregate read from the vault (V4-DELTA §6 migrations — JSON-level,
- * idempotent, non-destructive):
- *  - `chargesheetFiledDate` derives from the register (earliest row) once rows exist
- *  - legacy `dgOrderDate` maps onto `dgApprovedDate`
- *  - the two legacy fixed sanction fields become `sanctions[]` list items
- *  - a case-level arrestDate is copied to in-custody accused missing their own
+ * Normalize an aggregate read from the vault (V4-DELTA §6 migrations, JSON-level).
+ *
+ * ONE-TIME legacy migrations — gated on `legacyMigrated` and stamped after running,
+ * so an officer's later CLEAR of a migrated value is never silently resurrected
+ * (review finding):
+ *  - legacy `dgOrderDate` copies onto `dgApprovedDate`
+ *  - the two legacy fixed sanction fields lift into `sanctions[]`
+ *  - a case-level arrestDate copies to in-custody accused missing their own
+ *  - a legacy case-level `chargesheetFiledDate` with an EMPTY register becomes
+ *    register row #1 (kind main, case-wide coverage) per V4-DELTA §6
+ *
+ * ALWAYS-ON derivation: `chargesheetFiledDate` = earliest register date once any
+ * row exists (the register is the source of truth; rows are editable in the UI).
  */
 export function hydrateAggregate(agg: CaseAggregate): CaseAggregate {
   const c = { ...agg.case };
-  const chargesheets = agg.chargesheets ?? [];
+  let chargesheets = agg.chargesheets ?? [];
+  let persons = agg.persons;
+
+  if (!c.legacyMigrated) {
+    if (!c.dgApprovedDate && c.dgOrderDate) c.dgApprovedDate = c.dgOrderDate;
+
+    if (!c.sanctions) {
+      const legacy: CaseRecord["sanctions"] = [];
+      if (c.sanctionStatutory && c.sanctionStatutory !== "na")
+        legacy.push({ id: `${c.id}-sanction-statutory`, kind: "Statutory (UAPA s.45)", state: c.sanctionStatutory, date: c.sanctionStatutory === "obtained" ? c.rule4SanctionDate ?? null : null });
+      if (c.sanctionDg && c.sanctionDg !== "na")
+        legacy.push({ id: `${c.id}-sanction-dg`, kind: "DG sanction", state: c.sanctionDg, date: null });
+      if (legacy.length) c.sanctions = legacy;
+    }
+
+    const inCustody = new Set(["police_custody", "judicial_custody", "charge_sheeted"]);
+    persons = agg.persons.map((p) =>
+      p.role === "accused" && !p.arrestDate && c.arrestDate && p.accusedStatus && inCustody.has(p.accusedStatus)
+        ? { ...p, arrestDate: c.arrestDate }
+        : p,
+    );
+
+    if (chargesheets.length === 0 && c.chargesheetFiledDate) {
+      // V4-DELTA §6: the legacy single date becomes register row #1. Empty
+      // accusedIds = case-wide coverage (legacy semantics), so clocks behave
+      // exactly as before the register existed.
+      chargesheets = [{
+        id: `${c.id}-cs-legacy`,
+        caseId: c.id,
+        kind: "main",
+        date: c.chargesheetFiledDate,
+        accusedIds: [],
+        note: "Migrated from the case-level filing date.",
+      }];
+    }
+
+    c.legacyMigrated = true;
+  }
 
   if (chargesheets.length > 0) {
     c.chargesheetFiledDate = [...chargesheets].map((cs) => cs.date).sort()[0];
   }
-  if (!c.dgApprovedDate && c.dgOrderDate) c.dgApprovedDate = c.dgOrderDate;
-
-  if (!c.sanctions) {
-    const legacy: CaseRecord["sanctions"] = [];
-    if (c.sanctionStatutory && c.sanctionStatutory !== "na")
-      legacy.push({ id: `${c.id}-sanction-statutory`, kind: "Statutory (UAPA s.45)", state: c.sanctionStatutory, date: c.sanctionStatutory === "obtained" ? c.rule4SanctionDate ?? null : null });
-    if (c.sanctionDg && c.sanctionDg !== "na")
-      legacy.push({ id: `${c.id}-sanction-dg`, kind: "DG sanction", state: c.sanctionDg, date: null });
-    if (legacy.length) c.sanctions = legacy;
-  }
-
-  const inCustody = new Set(["police_custody", "judicial_custody", "charge_sheeted"]);
-  const persons = agg.persons.map((p) =>
-    p.role === "accused" && !p.arrestDate && c.arrestDate && p.accusedStatus && inCustody.has(p.accusedStatus)
-      ? { ...p, arrestDate: c.arrestDate }
-      : p,
-  );
 
   return { ...agg, case: c, persons, chargesheets };
 }

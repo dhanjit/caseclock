@@ -12,7 +12,9 @@
 import { create } from "zustand";
 import { useSession } from "./session";
 import { useCases } from "./cases";
+import { useCio } from "./cio";
 import { useWatchlist } from "./watchlist";
+import { SAMPLE_CIO, SAMPLE_WATCHLIST } from "@/domain/seed";
 import { loadSampleData } from "./seed";
 
 const KEY = "demo_state";
@@ -44,7 +46,7 @@ interface OnboardingState {
   load: () => Promise<void>;
   /** First run only: seed demo cases + mark active, iff never onboarded and the vault is empty. */
   maybeStartDemo: () => Promise<void>;
-  /** Wipe all cases + watchlist, mark cleared, and drop the banner. */
+  /** Remove the DEMO cases + seeded watchlist/CIO entries, mark cleared, drop the banner. */
   clearAndReset: () => Promise<void>;
 }
 
@@ -76,11 +78,24 @@ export const useOnboarding = create<OnboardingState>((set) => ({
   },
 
   async clearAndReset() {
-    // Snapshot ids first — the stores mutate as we remove.
+    // DEMO-ONLY sweep (V7-9 / review fix): the officer's prototype refuses to
+    // delete entered cases — "Only sample cases can be removed." A real case
+    // created while the banner was up must survive this button. Snapshot ids
+    // first — the stores mutate as we remove.
     const cases = useCases.getState();
-    for (const agg of [...cases.aggregates]) await cases.remove(agg.case.id);
+    for (const agg of [...cases.aggregates].filter((a) => a.case.demo)) {
+      await cases.remove(agg.case.id);
+    }
     const watchlist = useWatchlist.getState();
-    for (const name of [...watchlist.names]) await watchlist.remove(name);
+    for (const name of [...watchlist.names].filter((n) => SAMPLE_WATCHLIST.includes(n))) {
+      await watchlist.remove(name);
+    }
+    // Seeded demo officers leave too — unless a surviving real case references one.
+    const cio = useCio.getState();
+    const inUse = new Set(useCases.getState().aggregates.map((a) => a.case.cioId).filter(Boolean));
+    for (const o of SAMPLE_CIO) {
+      if (!inUse.has(o.id) && cio.officers.some((x) => x.id === o.id)) await cio.remove(o.id);
+    }
     await writeState("cleared");
     set({ demoActive: false });
   },

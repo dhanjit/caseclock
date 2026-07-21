@@ -85,6 +85,7 @@ export function CaseDetail({ id }: { id: string }) {
             agg.processRequests ?? [],
             agg.commsRequests ?? [],
             agg.towerDumps ?? [],
+            agg.chargesheets ?? [],
           )
         : [],
     [agg, today],
@@ -141,35 +142,41 @@ export function CaseDetail({ id }: { id: string }) {
     }
   }
 
-  // Overlap-safe: patch reads the LATEST committed aggregate, so two panels saving
-  // near-simultaneously compose instead of clobbering each other.
+  // Overlap-safe: patch reads the LATEST committed aggregate. Array saves accept an
+  // UPDATER FUNCTION resolved against that latest state — a panel passing a plain
+  // array is a render-time snapshot, and two quick edits from the same render were
+  // clobbering each other (review finding, live-reproduced).
+  type ArrOrFn<T> = T[] | ((prev: T[]) => T[]);
+  function resolveArr<T>(v: ArrOrFn<T>, prev: T[]): T[] {
+    return typeof v === "function" ? (v as (p: T[]) => T[])(prev) : v;
+  }
   async function saveCase(patchObj: Partial<CaseRecord>) {
     await patch(id, (a) => ({ ...a, case: { ...a.case, ...patchObj, lastTouchedAt: today } }));
   }
-  async function savePersons(persons: PersonRecord[]) {
-    await patch(id, (a) => ({ ...a, persons, case: { ...a.case, lastTouchedAt: today } }));
+  async function savePersons(persons: ArrOrFn<PersonRecord>) {
+    await patch(id, (a) => ({ ...a, persons: resolveArr(persons, a.persons), case: { ...a.case, lastTouchedAt: today } }));
   }
-  async function saveHearings(hearings: HearingRecord[]) {
-    await patch(id, (a) => ({ ...a, hearings, case: { ...a.case, lastTouchedAt: today } }));
+  async function saveHearings(hearings: ArrOrFn<HearingRecord>) {
+    await patch(id, (a) => ({ ...a, hearings: resolveArr(hearings, a.hearings), case: { ...a.case, lastTouchedAt: today } }));
   }
-  async function saveEvidence(evidence: EvidenceRecord[]) {
-    await patch(id, (a) => ({ ...a, evidence, case: { ...a.case, lastTouchedAt: today } }));
+  async function saveEvidence(evidence: ArrOrFn<EvidenceRecord>) {
+    await patch(id, (a) => ({ ...a, evidence: resolveArr(evidence, a.evidence ?? []), case: { ...a.case, lastTouchedAt: today } }));
   }
-  async function saveRequests(processRequests: ProcessRequestRecord[]) {
-    await patch(id, (a) => ({ ...a, processRequests, case: { ...a.case, lastTouchedAt: today } }));
+  async function saveRequests(processRequests: ArrOrFn<ProcessRequestRecord>) {
+    await patch(id, (a) => ({ ...a, processRequests: resolveArr(processRequests, a.processRequests ?? []), case: { ...a.case, lastTouchedAt: today } }));
   }
-  async function saveChargesheets(chargesheets: ChargesheetRecord[]) {
+  async function saveChargesheets(chargesheets: ArrOrFn<ChargesheetRecord>) {
     // chargesheetFiledDate re-derives from the register on save (hydrateAggregate).
-    await patch(id, (a) => ({ ...a, chargesheets, case: { ...a.case, lastTouchedAt: today } }));
+    await patch(id, (a) => ({ ...a, chargesheets: resolveArr(chargesheets, a.chargesheets ?? []), case: { ...a.case, lastTouchedAt: today } }));
   }
-  async function saveComms(commsRequests: CommsRequestRecord[]) {
-    await patch(id, (a) => ({ ...a, commsRequests, case: { ...a.case, lastTouchedAt: today } }));
+  async function saveComms(commsRequests: ArrOrFn<CommsRequestRecord>) {
+    await patch(id, (a) => ({ ...a, commsRequests: resolveArr(commsRequests, a.commsRequests ?? []), case: { ...a.case, lastTouchedAt: today } }));
   }
-  async function saveTowers(towerDumps: TowerDumpRecord[]) {
-    await patch(id, (a) => ({ ...a, towerDumps, case: { ...a.case, lastTouchedAt: today } }));
+  async function saveTowers(towerDumps: ArrOrFn<TowerDumpRecord>) {
+    await patch(id, (a) => ({ ...a, towerDumps: resolveArr(towerDumps, a.towerDumps ?? []), case: { ...a.case, lastTouchedAt: today } }));
   }
-  async function saveMovements(custodyMovements: CustodyMovementRecord[]) {
-    await patch(id, (a) => ({ ...a, custodyMovements, case: { ...a.case, lastTouchedAt: today } }));
+  async function saveMovements(custodyMovements: ArrOrFn<CustodyMovementRecord>) {
+    await patch(id, (a) => ({ ...a, custodyMovements: resolveArr(custodyMovements, a.custodyMovements ?? []), case: { ...a.case, lastTouchedAt: today } }));
   }
   async function togglePriority() {
     if (!agg) return;

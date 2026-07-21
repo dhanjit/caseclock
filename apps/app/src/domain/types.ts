@@ -366,6 +366,11 @@ export interface CaseRecord {
   status: CaseStatus;
   category?: CaseCategory; // officer-set Cat I–V facet (default "I")
   demo?: boolean; // sample/demo case — the only kind that may be deleted (V7-9)
+  /** One-time legacy migrations (dgOrderDate copy, sanction-field lift, arrest
+   * copy-down, chargesheet-date → register row) have run. Without this stamp the
+   * copies re-ran on every hydrate, silently resurrecting values the officer had
+   * deliberately cleared (review finding). */
+  legacyMigrated?: boolean;
   lastTouchedAt?: ISODate | null;
   nextReviewDate?: ISODate | null;
   // Fluid user priority (REQUIREMENTS §1) — the officer flags up to ~10 cases that
@@ -398,6 +403,23 @@ export interface PersonRecord {
   sentence?: string;
   sentenceDate?: ISODate | null;
   appealBy?: ISODate | null;
+}
+
+/**
+ * Accused who are ARRESTED but not yet covered by any chargesheet (review fix:
+ * a partial chargesheet must NOT close the FR/default-bail clock case-wide).
+ * Coverage semantics: a chargesheet listing specific accusedIds covers those;
+ * a chargesheet with an EMPTY accusedIds list is case-wide (legacy/V6 `csFiled`
+ * semantics — old vaults migrate their single filing date to such a row).
+ */
+export function uncoveredArrestedAccused(
+  persons: PersonRecord[],
+  chargesheets: ChargesheetRecord[],
+): PersonRecord[] {
+  const arrested = persons.filter((p) => p.role === "accused" && p.arrestDate);
+  if (chargesheets.some((cs) => cs.accusedIds.length === 0)) return [];
+  const covered = new Set(chargesheets.flatMap((cs) => cs.accusedIds));
+  return arrested.filter((p) => !covered.has(p.id));
 }
 
 /** Earliest per-accused arrest (fallback: case-level arrestDate) — the officer's

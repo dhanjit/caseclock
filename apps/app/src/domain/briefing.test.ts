@@ -203,7 +203,8 @@ describe("minimal-aggregate edge", () => {
     expect(headingByNo(b, "5.1").lines).toEqual(["—"]);
     expect(headingByNo(b, 11).lines).toEqual(["—"]);
     expect(headingByNo(b, 12).lines).toEqual(["—"]);
-    expect(headingByNo(b, 7).lines).toEqual(["Total: 0"]);
+    expect(headingByNo(b, 7).lines[0]).toBe("Total: 0");
+    expect(headingByNo(b, 7).lines).toHaveLength(10); // all rows, zeros included (officer format)
     // Free-text headings fall back to em-dash too.
     expect(headingByNo(b, 6).lines).toEqual(["—"]);
     expect(b.header.identity).toBe("—");

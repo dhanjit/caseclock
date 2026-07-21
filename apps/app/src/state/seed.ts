@@ -10,8 +10,11 @@ import { useWatchlist } from "./watchlist";
 
 export async function loadSampleData(): Promise<void> {
   const cases = useCases.getState();
+  // Insert-only (review fix): re-loading must never clobber officer edits made to
+  // a demo case — a fixture is written only when its id is absent.
+  const existing = new Set(cases.aggregates.map((a) => a.case.id));
   for (const agg of sampleAggregates()) {
-    await cases.save(agg);
+    if (!existing.has(agg.case.id)) await cases.save(agg);
   }
   const watchlist = useWatchlist.getState();
   for (const name of SAMPLE_WATCHLIST) {

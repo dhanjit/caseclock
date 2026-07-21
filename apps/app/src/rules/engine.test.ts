@@ -436,6 +436,97 @@ describe("comms registers (V4-DELTA N3) — CDR/IPDR/IMEI + tower pendency", () 
   });
 });
 
+describe("chargesheet coverage — a partial CS must not hide a co-accused's exposure (review fix)", () => {
+  const CS = (accusedIds: string[]): import("@/domain/types").ChargesheetRecord => ({
+    id: "cs1", caseId: "c1", kind: "main", date: "2026-03-20", accusedIds,
+  });
+  const persons: PersonRecord[] = [
+    { id: "a1", caseId: "c1", role: "accused", name: "A-1", accusedStatus: "charge_sheeted", arrestDate: "2026-01-01" },
+    { id: "a2", caseId: "c1", role: "accused", name: "A-2", accusedStatus: "police_custody", arrestDate: "2026-05-01" },
+  ];
+  const runCs = (c: CaseRecord, today: string, cs: import("@/domain/types").ChargesheetRecord[]) =>
+    computeDeadlines(c, persons, [], DEFAULT_SETTINGS, today, [], [], [], [], cs);
+
+  it("fr1 stays OPEN anchored on the uncovered accused's arrest; names them", () => {
+    const c = mk({ punishmentBand: "10plus", chargesheetFiledDate: "2026-03-20" }); // derived from register
+    const e = runCs(c, "2026-07-21", [CS(["a1"])]).find((d) => d.ruleId === "fr1-chargesheet")!;
+    expect(e.state).not.toBe("done");
+    expect(e.dueAt).toBe(addDays("2026-05-01", 75)); // re-anchored on A-2
+    expect(e.note).toMatch(/A-2/);
+  });
+
+  it("UAPA: the 43-D(2) day-90 window keeps governing the uncovered accused", () => {
+    const c = mk({ uapaFlag: true, chargesheetFiledDate: "2026-03-20", custodyStatus: "in_custody" });
+    const pp = runCs(c, "2026-07-21", [CS(["a1"])]).find((d) => d.ruleId === "uapa-pp-report-window")!;
+    expect(pp).toBeDefined();
+    expect(pp.dueAt).toBe(addDays("2026-05-01", 90));
+  });
+
+  it("covering every arrested accused (or an empty-accusedIds case-wide CS) closes the clock", () => {
+    const c = mk({ punishmentBand: "10plus", chargesheetFiledDate: "2026-03-20" });
+    expect(runCs(c, "2026-07-21", [CS(["a1", "a2"])]).find((d) => d.ruleId === "fr1-chargesheet")!.state).toBe("done");
+    expect(runCs(c, "2026-07-21", [CS([])]).find((d) => d.ruleId === "fr1-chargesheet")!.state).toBe("done"); // legacy semantics
+    expect(runCs(mk({ uapaFlag: true, chargesheetFiledDate: "2026-03-20" }), "2026-07-21", [CS([])]).find((d) => d.ruleId === "uapa-pp-report-window")).toBeUndefined();
+  });
+
+  it("legacy (no register): the single case-level date still closes it", () => {
+    const c = mk({ punishmentBand: "10plus", arrestDate: "2026-01-01", chargesheetFiledDate: "2026-03-20" });
+    expect(computeDeadlines(c, [], [], DEFAULT_SETTINGS, "2026-07-21").find((d) => d.ruleId === "fr1-chargesheet")!.state).toBe("done");
+  });
+});
+
+describe("review fixes — production-24h fan-out, appeal ownership, custody fallback, extension flag, DG mootness", () => {
+  it("production-24h fans out per arrested accused; a custody spell clears it", () => {
+    const persons: PersonRecord[] = [
+      { id: "a1", caseId: "c1", role: "accused", name: "A-1", arrestDate: "2026-05-01",
+        custodyHistory: [{ id: "h1", kind: "police", from: "2026-05-01", to: "2026-05-10" }] },
+      { id: "a2", caseId: "c1", role: "accused", name: "A-2", arrestDate: "2026-07-19" },
+    ];
+    const rows = run(mk({ firstRemandDate: "2026-05-02" }), "2026-07-21", persons).filter((d) => d.ruleId === "production-24h");
+    expect(rows).toHaveLength(2);
+    expect(rows.find((r) => r.type.includes("A-1"))!.state).toBe("done"); // custody spell recorded
+    expect(rows.find((r) => r.type.includes("A-2"))!.state).toBe("overdue"); // NOT cleared by the old case remand
+  });
+
+  it("per-accused conviction records own the appeal window — no case-level double count", () => {
+    const persons: PersonRecord[] = [
+      { id: "a1", caseId: "c1", role: "accused", name: "A-1", accusedStatus: "convicted", sentenceDate: "2026-03-12" },
+    ];
+    const rows = run(mk({ judgmentDate: "2026-03-10", outcome: "convicted", trialCourtLevel: "sessions" }), "2026-04-01", persons);
+    expect(rows.find((d) => d.ruleId === "appeal-conviction-sessions-60")).toBeUndefined();
+    expect(rows.find((d) => d.ruleId === "appeal-window-accused")).toBeDefined();
+    // without accused records the case-level rule still fires
+    const legacy = run(mk({ judgmentDate: "2026-03-10", outcome: "convicted", trialCourtLevel: "sessions" }), "2026-04-01", []);
+    expect(legacy.find((d) => d.ruleId === "appeal-conviction-sessions-60")).toBeDefined();
+  });
+
+  it("custody-production: case-level date is a fallback, not an extra row", () => {
+    const persons: PersonRecord[] = [
+      { id: "a1", caseId: "c1", role: "accused", name: "A-1", accusedStatus: "police_custody", custodyEndDate: "2026-07-27" },
+    ];
+    const rows = run(mk({ custodyEndDate: "2026-07-27" }), "2026-07-21", persons).filter((d) => d.ruleId === "custody-production");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].instanceId).toBe("a1");
+  });
+
+  it("legacy uapaExtensionGranted flag satisfies the 43-D window", () => {
+    const c = mk({ uapaFlag: true, arrestDate: "2026-01-01", custodyStatus: "in_custody", uapaExtensionGranted: true });
+    const pp = run(c, "2026-07-21").find((d) => d.ruleId === "uapa-pp-report-window")!;
+    expect(pp.state).toBe("done");
+    expect(pp.note).toMatch(/legacy flag/);
+  });
+
+  it("DG/SP steps go moot (no eternal hard flag) once the chargesheet is on file without them", () => {
+    const c = mk({ uapaFlag: true, arrestDate: "2026-01-01", frISubmittedDate: "2026-02-01", chargesheetFiledDate: "2026-03-01" });
+    const rows = run(c, "2026-07-21");
+    expect(rows.find((d) => d.ruleId === "fr-dg-order")).toBeUndefined();
+    expect(rows.find((d) => d.ruleId === "fr-sp-remarks")).toBeUndefined();
+    // recorded steps still show as done rows
+    const done = run(mk({ ...c, dgApprovedDate: "2026-02-05", spRemarksDate: "2026-02-06" }), "2026-07-21");
+    expect(done.find((d) => d.ruleId === "fr-dg-order")!.state).toBe("done");
+  });
+});
+
 describe("routine trial 15-day lead (§4.2)", () => {
   it("routine (non-superior) court hearings now carry a 15-day lead, not 10", () => {
     const hearings: HearingRecord[] = [{ id: "h", caseId: "c1", hearingDate: "2026-07-20", purpose: "trial" }];

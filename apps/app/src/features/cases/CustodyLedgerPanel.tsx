@@ -20,7 +20,7 @@ export function CustodyLedgerPanel({
   onSaveMovements,
 }: {
   agg: CaseAggregate;
-  onSaveMovements: (rows: CustodyMovementRecord[]) => Promise<void>;
+  onSaveMovements: (rows: CustodyMovementRecord[] | ((prev: CustodyMovementRecord[]) => CustodyMovementRecord[])) => Promise<void>;
 }) {
   const rows = agg.custodyMovements ?? [];
   const today = todayISO();
@@ -33,6 +33,7 @@ export function CustodyLedgerPanel({
   const [from, setFrom] = useState("Malkhana");
   const [to, setTo] = useState("");
   const [purpose, setPurpose] = useState("FSL");
+  const [sealAtOut, setSealAtOut] = useState<"yes" | "no">("yes");
   // inline "returned" flow (no window.confirm): backDate + seal state per row
   const [returning, setReturning] = useState<string | null>(null);
   const [backDate, setBackDate] = useState(today);
@@ -41,8 +42,8 @@ export function CustodyLedgerPanel({
   async function logMove() {
     if (!exhibit.trim() || !to.trim()) return;
     const linked = (agg.evidence ?? []).find((e) => e.exhibitNo?.toLowerCase() === exhibit.trim().toLowerCase());
-    await onSaveMovements([
-      ...rows,
+    await onSaveMovements((prev) => [
+      ...prev,
       {
         id: newId("cm"),
         caseId: agg.case.id,
@@ -54,17 +55,18 @@ export function CustodyLedgerPanel({
         from: from.trim() || "Malkhana",
         to: to.trim(),
         purpose,
-        sealIntact: true,
+        sealIntact: sealAtOut === "yes",
       },
     ]);
     setExhibit("");
     setNature("");
     setTo("");
+    setSealAtOut("yes");
   }
 
   async function markReturned(id: string) {
-    await onSaveMovements(
-      rows.map((m) => (m.id === id ? { ...m, backDate, sealIntact: sealOnReturn === "yes" ? m.sealIntact : false } : m)),
+    await onSaveMovements((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, backDate, sealIntact: sealOnReturn === "yes" ? m.sealIntact : false } : m)),
     );
     setReturning(null);
     setSealOnReturn("yes");
@@ -115,13 +117,13 @@ export function CustodyLedgerPanel({
                         <option value="yes">seal intact</option>
                         <option value="no">seal broken</option>
                       </select>
-                      <button onClick={() => void markReturned(m.id)} className="rounded bg-ink px-1.5 py-0.5 font-mono text-[10px] text-surface">✓</button>
-                      <button onClick={() => setReturning(null)} className="rounded border border-line px-1.5 py-0.5 font-mono text-[10px]">✕</button>
+                      <button onClick={() => void markReturned(m.id)} className="rounded bg-ink px-2.5 py-1.5 font-mono text-[11px] text-surface" aria-label="Confirm return">✓</button>
+                      <button onClick={() => setReturning(null)} className="rounded border border-line px-2.5 py-1.5 font-mono text-[11px]" aria-label="Cancel return">✕</button>
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1.5">
                       <span className="rounded bg-critical px-1.5 py-0.5 font-mono text-[10px] font-bold text-white">OUT</span>
-                      <button onClick={() => { setReturning(m.id); setBackDate(today); }} className="rounded border border-line px-1.5 py-0.5 font-mono text-[10px] text-court">
+                      <button onClick={() => { setReturning(m.id); setBackDate(today); }} className="rounded border border-line px-2.5 py-1.5 font-mono text-[11px] text-court">
                         returned
                       </button>
                     </span>
@@ -154,6 +156,10 @@ export function CustodyLedgerPanel({
           <option>Court exhibit</option>
           <option>Expert examination</option>
           <option>Other</option>
+        </select>
+        <select className={`${input} py-1.5 text-xs`} value={sealAtOut} onChange={(e) => setSealAtOut(e.target.value as "yes" | "no")} aria-label="Seal state at dispatch">
+          <option value="yes">Seal intact</option>
+          <option value="no">Seal broken</option>
         </select>
         <button onClick={() => void logMove()} disabled={!exhibit.trim() || !to.trim()} className={`${btn("primary")} disabled:opacity-40`}>+ Log movement</button>
       </div>

@@ -24,7 +24,7 @@ export function EvidencePanel({
   onSaveEvidence,
 }: {
   agg: CaseAggregate;
-  onSaveEvidence: (evidence: EvidenceRecord[]) => Promise<void>;
+  onSaveEvidence: (evidence: EvidenceRecord[] | ((prev: EvidenceRecord[]) => EvidenceRecord[])) => Promise<void>;
 }) {
   const evidence = agg.evidence ?? [];
   const today = todayISO();
@@ -39,6 +39,7 @@ export function EvidencePanel({
   const [obsFor, setObsFor] = useState<string | null>(null);
   const [obsText, setObsText] = useState("");
   const [obsFlag, setObsFlag] = useState<EvidenceObservation["flag"]>("normal");
+  const [removeArm, setRemoveArm] = useState<string | null>(null);
 
   async function add() {
     if (!desc.trim() || busy) return;
@@ -55,7 +56,7 @@ export function EvidencePanel({
       exhibitNo: exhibitNo.trim() || undefined,
     };
     try {
-      await onSaveEvidence([...evidence, e]);
+      await onSaveEvidence((prev) => [...prev, e]);
       setDesc("");
       setReport("");
       setWitnesses("");
@@ -66,9 +67,13 @@ export function EvidencePanel({
       setBusy(false);
     }
   }
+  // Read-modify-write against the LATEST array (updater form) - render-snapshot
+  // arrays clobbered quick successive edits (review finding).
   const update = (id: string, patch: Partial<EvidenceRecord>) =>
-    onSaveEvidence(evidence.map((e) => (e.id === id ? { ...e, ...patch } : e)));
-  const remove = (id: string) => onSaveEvidence(evidence.filter((e) => e.id !== id));
+    onSaveEvidence((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+  const patchRow = (id: string, fn: (e: EvidenceRecord) => Partial<EvidenceRecord>) =>
+    onSaveEvidence((prev) => prev.map((e) => (e.id === id ? { ...e, ...fn(e) } : e)));
+  const remove = (id: string) => onSaveEvidence((prev) => prev.filter((e) => e.id !== id));
   // Marking received stamps the receipt date, clears the alert, and offers the
   // officer's observation on the report (V4-DELTA N5).
   const toggleStatus = (e: EvidenceRecord) => {
@@ -83,16 +88,18 @@ export function EvidencePanel({
   };
   const saveObservation = (e: EvidenceRecord) => {
     if (obsText.trim()) {
-      void update(e.id, {
-        observations: [...(e.observations ?? []), { id: newId("obs"), date: today, flag: obsFlag, text: obsText.trim() }],
-      });
+      const text = obsText.trim();
+      const flag = obsFlag;
+      void patchRow(e.id, (x) => ({
+        observations: [...(x.observations ?? []), { id: newId("obs"), date: today, flag, text }],
+      }));
     }
     setObsFor(null);
     setObsText("");
     setObsFlag("normal");
   };
   const setObsFlagOn = (e: EvidenceRecord, obsId: string, flag: EvidenceObservation["flag"]) =>
-    update(e.id, { observations: (e.observations ?? []).map((o) => (o.id === obsId ? { ...o, flag } : o)) });
+    patchRow(e.id, (x) => ({ observations: (x.observations ?? []).map((o) => (o.id === obsId ? { ...o, flag } : o)) }));
   const totalWitnesses = evidence.reduce((n, e) => n + (e.witnesses ?? 0), 0);
   const overdueCount = evidence.filter((e) => expertReportOverdue(e, today)).length;
 
@@ -118,7 +125,15 @@ export function EvidencePanel({
                     REPORT OVERDUE
                   </span>
                 )}
-                <button onClick={() => remove(e.id)} className="text-xs text-soft hover:text-critical">✕</button>
+                {removeArm === e.id ? (
+                  <span className="flex shrink-0 items-center gap-1">
+                    <span className="text-[10px] font-semibold text-critical">Delete row?</span>
+                    <button onClick={() => { void remove(e.id); setRemoveArm(null); }} className="rounded bg-critical px-2 py-1 text-[11px] font-semibold text-white" aria-label={`Delete ${e.description}`}>Delete</button>
+                    <button onClick={() => setRemoveArm(null)} className="rounded border border-line px-2 py-1 text-[11px]" aria-label="Keep row">Keep</button>
+                  </span>
+                ) : (
+                  <button onClick={() => setRemoveArm(e.id)} className="px-1.5 py-1 text-xs text-soft hover:text-critical" title="Remove evidence row" aria-label={`Remove ${e.description}`}>✕</button>
+                )}
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-ink-dim">
                 {e.reportToObtain && <span>→ report: <Highlighted text={e.reportToObtain} /></span>}
@@ -148,7 +163,8 @@ export function EvidencePanel({
                       <button
                         onClick={() => void setObsFlagOn(e, o.id, o.flag === "high" ? "normal" : "high")}
                         title={o.flag === "high" ? "High — tap to set Normal" : "Normal — tap to flag High (enters the briefing note)"}
-                        className="shrink-0"
+                        aria-label={o.flag === "high" ? "Set observation to Normal" : "Flag observation High"}
+                        className="shrink-0 px-1.5 py-1"
                       >
                         {o.flag === "high" ? "⭐" : "📝"}
                       </button>
@@ -172,8 +188,8 @@ export function EvidencePanel({
                     <option value="normal">● Normal</option>
                     <option value="high">⭐ High</option>
                   </select>
-                  <button onClick={() => saveObservation(e)} className="rounded bg-ink px-2 py-1 font-mono text-[11px] text-surface">Save</button>
-                  <button onClick={() => setObsFor(null)} className="rounded border border-line px-2 py-1 font-mono text-[11px]">Skip</button>
+                  <button onClick={() => saveObservation(e)} className="rounded bg-ink px-3 py-1.5 font-mono text-[11px] text-surface">Save</button>
+                  <button onClick={() => setObsFor(null)} className="rounded border border-line px-3 py-1.5 font-mono text-[11px]">Skip</button>
                 </div>
               ) : (
                 e.status === "received" && (

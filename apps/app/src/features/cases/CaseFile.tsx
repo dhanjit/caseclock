@@ -48,9 +48,7 @@ function AccusedCountTable({ agg }: { agg: CaseAggregate }) {
   return (
     <table className="w-full max-w-xs border-collapse text-[13px]">
       <tbody>
-        {rows
-          .filter((r, i) => i === 0 || r.count > 0)
-          .map((r, i) => (
+        {rows.map((r, i) => (
             <tr key={r.label} className={i === 0 ? "bg-surface-3 font-semibold" : "border-t border-surface-3"}>
               <td className="px-2 py-1">{r.label}</td>
               <td className="px-2 py-1 text-right font-mono font-semibold">{r.count}</td>
@@ -67,7 +65,7 @@ function ChargesheetRegister({
   onSave,
 }: {
   agg: CaseAggregate;
-  onSave?: (rows: ChargesheetRecord[]) => Promise<void>;
+  onSave?: (rows: ChargesheetRecord[] | ((prev: ChargesheetRecord[]) => ChargesheetRecord[])) => Promise<void>;
 }) {
   const rows = agg.chargesheets ?? [];
   const accused = agg.persons.filter((p) => p.role === "accused");
@@ -76,12 +74,34 @@ function ChargesheetRegister({
   const [date, setDate] = useState("");
   const [court, setCourt] = useState("");
   const [ids, setIds] = useState<string[]>([]);
+  // Row edit (edit-only register: rows are corrected, never deleted — a mistyped
+  // date was otherwise unrepairable and drove every filing-date consumer).
+  const [editId, setEditId] = useState<string | null>(null);
   const name = (id: string) => accused.find((p) => p.id === id)?.name ?? id;
+
+  function startRowEdit(cs: ChargesheetRecord) {
+    setEditId(cs.id);
+    setKind(cs.kind);
+    setDate(cs.date);
+    setCourt(cs.court ?? "");
+    setIds(cs.accusedIds);
+    setAdding(false);
+  }
+  async function saveRowEdit() {
+    if (!date || !onSave || !editId) return;
+    const id = editId;
+    const patch = { kind, date, court: court.trim() || undefined, accusedIds: ids };
+    await onSave((prev) => prev.map((cs) => (cs.id === id ? { ...cs, ...patch } : cs)));
+    setEditId(null);
+    setCourt("");
+    setIds([]);
+    setDate("");
+  }
 
   async function add() {
     if (!date || !onSave) return;
-    await onSave([
-      ...rows,
+    await onSave((prev) => [
+      ...prev,
       { id: newId("cs"), caseId: agg.case.id, kind, date, court: court.trim() || undefined, accusedIds: ids },
     ]);
     setAdding(false);
@@ -112,6 +132,7 @@ function ChargesheetRegister({
               <th className="px-3 py-1.5">Date filed</th>
               <th className="px-3 py-1.5">Court / CC no.</th>
               <th className="px-3 py-1.5">Accused covered</th>
+              <th className="w-14 px-3 py-1.5" aria-label="Actions" />
             </tr>
           </thead>
           <tbody>
@@ -122,13 +143,20 @@ function ChargesheetRegister({
                   <td className="px-3 py-1.5 font-semibold">{cs.kind === "main" ? `Main (CS-${i + 1})` : `Supplementary (CS-${i + 1})`}</td>
                   <td className="px-3 py-1.5 font-mono">{fmtDate(cs.date)}</td>
                   <td className="px-3 py-1.5">{cs.court || "—"}</td>
-                  <td className="px-3 py-1.5">{cs.accusedIds.length ? cs.accusedIds.map(name).join("; ") : "—"}</td>
+                  <td className="px-3 py-1.5">{cs.accusedIds.length ? cs.accusedIds.map(name).join("; ") : "— case-wide —"}</td>
+                  <td className="px-3 py-1.5 text-right">
+                    {onSave && editId !== cs.id && (
+                      <button onClick={() => startRowEdit(cs)} className="rounded border border-line px-2 py-1 font-mono text-[10px] text-court" aria-label={`Edit chargesheet of ${fmtDate(cs.date)}`}>
+                        edit
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
           </tbody>
         </table>
       )}
-      {adding && (
+      {(adding || editId) && (
         <div className="space-y-2 border-t border-line/60 bg-surface-3 px-3 py-2.5">
           <div className="flex flex-wrap items-center gap-2">
             <select value={kind} onChange={(e) => setKind(e.target.value as "main" | "supplementary")} className="rounded border border-line bg-surface-2 px-2 py-1.5 text-sm">
@@ -153,8 +181,10 @@ function ChargesheetRegister({
             </div>
           )}
           <div className="flex justify-end gap-2">
-            <button onClick={() => setAdding(false)} className={btn("ghost")}>Cancel</button>
-            <button onClick={() => void add()} disabled={!date} className={`${btn("primary")} disabled:opacity-40`}>Record</button>
+            <button onClick={() => { setAdding(false); setEditId(null); }} className={btn("ghost")}>Cancel</button>
+            <button onClick={() => void (editId ? saveRowEdit() : add())} disabled={!date} className={`${btn("primary")} disabled:opacity-40`}>
+              {editId ? "Save correction" : "Record"}
+            </button>
           </div>
         </div>
       )}
@@ -179,7 +209,7 @@ export function CaseFile({
 }: {
   agg: CaseAggregate;
   onSaveCase: (patch: Partial<CaseRecord>) => Promise<void>;
-  onSaveChargesheets?: (rows: ChargesheetRecord[]) => Promise<void>;
+  onSaveChargesheets?: (rows: ChargesheetRecord[] | ((prev: ChargesheetRecord[]) => ChargesheetRecord[])) => Promise<void>;
 }) {
   const c = agg.case;
   const accused = agg.persons.filter((p) => p.role === "accused");

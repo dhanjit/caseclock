@@ -31,7 +31,9 @@ import {
   defaultAppealWindowDays,
   earliestArrest,
   processRequestLabel,
+  uncoveredArrestedAccused,
   type CaseRecord,
+  type ChargesheetRecord,
   type CommsRequestRecord,
   type TowerDumpRecord,
   type DeadlineEvent,
@@ -65,8 +67,31 @@ interface RuleCtx {
   processRequests: ProcessRequestRecord[];
   commsRequests: CommsRequestRecord[];
   towerDumps: TowerDumpRecord[];
+  chargesheets: ChargesheetRecord[];
   settings: Settings;
   today: ISODate;
+}
+
+/**
+ * Is the FR/default-bail pipeline still OPEN for anyone? With a chargesheet
+ * register, open while any ARRESTED accused is uncovered (review fix: a partial
+ * chargesheet hid a later-arrested co-accused's statutory exposure). Without a
+ * register (legacy vaults), the single case-level date governs.
+ */
+function frPipelineOpen(c: CaseRecord, persons: PersonRecord[], chargesheets: ChargesheetRecord[]): boolean {
+  if (chargesheets.length > 0) return uncoveredArrestedAccused(persons, chargesheets).length > 0;
+  return !c.chargesheetFiledDate;
+}
+
+/** FR anchor honouring coverage: earliest UNCOVERED arrest when a register exists. */
+function frAnchor(c: CaseRecord, persons: PersonRecord[], chargesheets: ChargesheetRecord[]): ISODate | null {
+  if (chargesheets.length > 0) {
+    const open = uncoveredArrestedAccused(persons, chargesheets)
+      .map((p) => p.arrestDate as ISODate)
+      .sort();
+    if (open[0]) return open[0];
+  }
+  return earliestArrest(c, persons);
 }
 
 interface Rule {
@@ -115,16 +140,37 @@ export const RULE_REGISTRY: Rule[] = [
     verified: "confirmed",
     severity: "statutory-critical",
     leadOffsets: [],
-    applies: (c) => !!c.arrestDate,
-    compute: ({ c, today }) => {
-      const due = addDays(c.arrestDate!, 1);
-      return {
-        type: "Production before magistrate (24h)",
-        dueAt: due,
-        state: stateVs(due, today, !!c.firstRemandDate),
-        note: "Excludes journey time; first production must be in person.",
-        approximate: true,
-      };
+    applies: () => true, // arrests may live on the accused rows (review fix)
+    compute: ({ c, persons, today }) => {
+      const arrested = persons.filter((p) => p.role === "accused" && p.arrestDate);
+      if (arrested.length === 0) {
+        if (!c.arrestDate) return null; // no arrest anywhere
+        const due = addDays(c.arrestDate, 1);
+        return {
+          type: "Production before magistrate (24h)",
+          dueAt: due,
+          state: stateVs(due, today, !!c.firstRemandDate),
+          note: "Excludes journey time; first production must be in person.",
+          approximate: true,
+        };
+      }
+      // Per-accused: produced = a custody spell on record from their arrest, or the
+      // case's first remand covering an arrest on/before that date.
+      return arrested.map((p) => {
+        const produced =
+          (p.custodyHistory ?? []).some((h) => h.from && p.arrestDate && h.from >= p.arrestDate) ||
+          (!!c.firstRemandDate && !!p.arrestDate && p.arrestDate <= c.firstRemandDate);
+        const due = addDays(p.arrestDate!, 1);
+        return {
+          type: `Production before magistrate (24h) — ${p.name}`,
+          dueAt: due,
+          occurrenceDate: due,
+          instanceId: p.id,
+          state: stateVs(due, today, produced),
+          note: "Excludes journey time; first production must be in person. Record the custody spell to clear.",
+          approximate: true,
+        };
+      });
     },
   },
 
@@ -139,26 +185,32 @@ export const RULE_REGISTRY: Rule[] = [
     track: "investigation",
     leadOffsets: LEAD_CRITICAL,
     applies: () => true, // anchor may live on the accused rows — resolved in compute
-    compute: ({ c, persons, today }) => {
-      // V4-DELTA §2: the FR anchor is the EARLIEST per-accused arrest (V6 frAnchor),
-      // falling back to the case-level arrestDate for older records.
-      const anchor = earliestArrest(c, persons);
+    compute: ({ c, persons, chargesheets, today }) => {
+      // V4-DELTA §2: anchor = earliest per-accused arrest; with a chargesheet
+      // register the clock re-anchors on the earliest UNCOVERED arrest and closes
+      // only when every arrested accused is covered (review fix — a partial CS
+      // must not hide a co-accused's default-bail exposure).
+      const anchor = frAnchor(c, persons, chargesheets);
       if (!anchor) return null;
+      const open = frPipelineOpen(c, persons, chargesheets);
+      const uncovered = chargesheets.length > 0 ? uncoveredArrestedAccused(persons, chargesheets) : [];
       const lim = custodyLimits(c);
       // Working alert = his buffered target from ARREST (§4.1). Statutory default-bail
       // date legally runs from FIRST REMAND (BNSS 187(3)), falling back to arrest.
       const buffered = addDays(anchor, lim.buffered);
-      const statutoryAnchor = c.firstRemandDate ?? anchor;
+      // A later-arrested uncovered accused's remand is not the case's first remand —
+      // anchor their statutory line on their own arrest.
+      const statutoryAnchor = chargesheets.length > 0 && uncovered.length > 0 ? anchor : (c.firstRemandDate ?? anchor);
       const statutory = addDays(statutoryAnchor, lim.statutory);
-      const anchorLabel = c.firstRemandDate ? "first remand" : "earliest arrest";
-      const filed = !!c.chargesheetFiledDate;
-      const note = filed
-        ? "Chargesheet / FR filed."
-        : `Buffered target ${lim.buffered}d from arrest · statutory ${statutory} (${lim.statutory}d from ${anchorLabel}) — miss = default bail.${lim.statutoryNote ? " " + lim.statutoryNote : ""}`;
+      const anchorLabel = statutoryAnchor === c.firstRemandDate ? "first remand" : "earliest open arrest";
+      const who = uncovered.length > 0 ? ` — ${uncovered.length} arrested accused not yet charge-sheeted (${uncovered.map((p) => p.name).join(", ")})` : "";
+      const note = !open
+        ? "Chargesheet / FR filed for every arrested accused."
+        : `Buffered target ${lim.buffered}d from arrest · statutory ${statutory} (${lim.statutory}d from ${anchorLabel}) — miss = default bail.${who}${lim.statutoryNote ? " " + lim.statutoryNote : ""}`;
       return {
         type: `Chargesheet / FR-I (${lim.buffered}d target)`,
         dueAt: buffered,
-        state: filed ? "done" : stateVs(buffered, today, false),
+        state: !open ? "done" : stateVs(buffered, today, false),
         note,
         owes: "IO",
       };
@@ -174,12 +226,15 @@ export const RULE_REGISTRY: Rule[] = [
     severity: "statutory",
     track: "investigation",
     leadOffsets: [15, 7, 3],
-    applies: (c) => c.uapaFlag && !!c.frISubmittedDate,
-    compute: ({ c, persons, today }) => {
+    applies: (c) => custodyLimits(c).caseType === "uapa" && !!c.frISubmittedDate,
+    compute: ({ c, persons, chargesheets, today }) => {
       const anchor = earliestArrest(c, persons);
       if (!anchor) return null;
-      const due = addDays(anchor, custodyLimits(c).buffered);
-      return { type: "SP remarks on FR (within the 150-day line)", dueAt: due, state: stateVs(due, today, !!c.spRemarksDate), owes: "self" };
+      // Chargesheet already on file without remarks → pipeline moot (mirror fr-ir-mha).
+      if (!frPipelineOpen(c, persons, chargesheets) && !c.spRemarksDate) return null;
+      const lim = custodyLimits(c);
+      const due = addDays(anchor, lim.buffered);
+      return { type: `SP remarks on FR (within the ${lim.buffered}-day line)`, dueAt: due, state: stateVs(due, today, !!c.spRemarksDate), owes: "self" };
     },
   },
   {
@@ -190,7 +245,10 @@ export const RULE_REGISTRY: Rule[] = [
     track: "investigation",
     leadOffsets: [3, 1],
     applies: (c) => !!c.frISubmittedDate,
-    compute: ({ c, today }) => {
+    compute: ({ c, persons, chargesheets, today }) => {
+      const done = !!(c.dgApprovedDate || c.dgOrderDate);
+      // Chargesheet already on file without a DG date → moot, don't nag forever.
+      if (!frPipelineOpen(c, persons, chargesheets) && !done) return null;
       const due = addDays(c.frISubmittedDate!, 7);
       return {
         type: "DG approval of FR-I (≤7 days)",
@@ -265,7 +323,9 @@ export const RULE_REGISTRY: Rule[] = [
           owes: "IO" as const,
           note: "Reminder 1 day prior; record the previous custody as history.",
         }));
-      if (c.custodyEndDate) {
+      // Legacy case-level date is a FALLBACK only — alongside per-accused rows it
+      // double-fired for the same custody spell (review fix).
+      if (rows.length === 0 && c.custodyEndDate) {
         rows.push({
           type: "Custody ends — produce accused / seek extension",
           dueAt: c.custodyEndDate,
@@ -328,10 +388,24 @@ export const RULE_REGISTRY: Rule[] = [
     // V4-DELTA §2: the reminder runs from day 75 (V6 CUSTEXT step) — lead 15 on the
     // day-90 boundary = day 75.
     leadOffsets: [15, 7, 3, 1],
-    applies: (c) => c.uapaFlag && !c.chargesheetFiledDate,
-    compute: ({ c, persons, today }) => {
-      const anchor = c.firstRemandDate ?? earliestArrest(c, persons);
+    applies: (c) => custodyLimits(c).caseType === "uapa",
+    compute: ({ c, persons, chargesheets, today }) => {
+      // Coverage-aware (review fix): the 43-D window keeps governing any arrested
+      // accused not yet charge-sheeted, even after a partial chargesheet.
+      if (!frPipelineOpen(c, persons, chargesheets)) return null;
+      const openAnchor = frAnchor(c, persons, chargesheets);
+      const anchor = chargesheets.length > 0 ? openAnchor : (c.firstRemandDate ?? openAnchor);
       if (!anchor) return null;
+      // Legacy vaults recorded the extension only as a boolean — honour it.
+      if (c.uapaExtensionGranted && !c.uapaPpReportFiledDate && !c.custodyExtFiledDate) {
+        return {
+          type: "UAPA 43-D(2) PP extension report",
+          dueAt: addDays(anchor, 90),
+          state: "done",
+          owes: "PP",
+          note: "Extension recorded as granted (legacy flag) — file the PP-report date when known.",
+        };
+      }
       const day90 = addDays(anchor, 90);
       // Either date evidences the extension step: the PP report or the officer's
       // explicit "custody extension 90→180 filed" date (V4-DELTA custodyExtFiledDate).
@@ -576,7 +650,8 @@ export const RULE_REGISTRY: Rule[] = [
     severity: "statutory-condonable",
     leadOffsets: [30, 7],
     applies: (c) => !!c.judgmentDate && c.outcome === "convicted" && c.trialCourtLevel === "magistrate",
-    compute: ({ c, today }) => appealResult(c, today, 30, "Appeal to Sessions"),
+    compute: ({ c, persons, today }) =>
+      hasAccusedConvictionRecords(persons) ? null : appealResult(c, today, 30, "Appeal to Sessions"),
   },
   {
     id: "appeal-conviction-sessions-60",
@@ -586,7 +661,8 @@ export const RULE_REGISTRY: Rule[] = [
     leadOffsets: [30, 7],
     applies: (c) =>
       !!c.judgmentDate && c.outcome === "convicted" && c.trialCourtLevel === "sessions" && !c.deathSentence,
-    compute: ({ c, today }) => appealResult(c, today, 60, "Appeal to High Court"),
+    compute: ({ c, persons, today }) =>
+      hasAccusedConvictionRecords(persons) ? null : appealResult(c, today, 60, "Appeal to High Court"),
   },
   {
     id: "appeal-conviction-sessions-death-30",
@@ -596,7 +672,8 @@ export const RULE_REGISTRY: Rule[] = [
     leadOffsets: [20, 7],
     applies: (c) =>
       !!c.judgmentDate && c.outcome === "convicted" && c.trialCourtLevel === "sessions" && !!c.deathSentence,
-    compute: ({ c, today }) => appealResult(c, today, 30, "Death-sentence appeal to High Court"),
+    compute: ({ c, persons, today }) =>
+      hasAccusedConvictionRecords(persons) ? null : appealResult(c, today, 30, "Death-sentence appeal to High Court"),
   },
   {
     // BNSS 419: appeals against acquittal lie to the HIGH COURT (90 days, Art. 114),
@@ -843,6 +920,12 @@ function hearingState(h: HearingRecord, today: ISODate): DeadlineState {
   return diffDays(today, h.hearingDate) > 0 ? "overdue" : "active";
 }
 
+/** Per-accused conviction records own the appeal window (review fix — the
+ * case-level rules double-counted it with a second, different due date). */
+function hasAccusedConvictionRecords(persons: PersonRecord[]): boolean {
+  return persons.some((p) => p.role === "accused" && p.accusedStatus === "convicted" && (p.appealBy || p.sentenceDate));
+}
+
 function appealResult(c: CaseRecord, today: ISODate, days: number, label: string): RuleResult {
   const due = addDays(c.judgmentDate!, days);
   return {
@@ -887,11 +970,12 @@ export function computeDeadlines(
   processRequests: ProcessRequestRecord[] = [],
   commsRequests: CommsRequestRecord[] = [],
   towerDumps: TowerDumpRecord[] = [],
+  chargesheets: ChargesheetRecord[] = [],
 ): DeadlineEvent[] {
   const out: DeadlineEvent[] = [];
   for (const rule of RULE_REGISTRY) {
     if (!rule.applies(c)) continue;
-    const res = rule.compute({ c, persons, hearings, evidence, processRequests, commsRequests, towerDumps, settings, today });
+    const res = rule.compute({ c, persons, hearings, evidence, processRequests, commsRequests, towerDumps, chargesheets, settings, today });
     if (!res) continue;
     for (const r of Array.isArray(res) ? res : [res]) {
       out.push({

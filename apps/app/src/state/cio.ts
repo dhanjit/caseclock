@@ -51,6 +51,7 @@ export const useCio = create<CioState>((set, get) => ({
   async add(name, rank) {
     const n = name.trim();
     if (!n) return;
+    if (!get().loaded) await get().load(); // never build on an unloaded (possibly empty) base
     const officers = [...get().officers, { id: crypto.randomUUID(), name: n, rank: rank?.trim() || undefined }];
     await write(officers);
     set({ officers });
@@ -68,6 +69,7 @@ export const useCio = create<CioState>((set, get) => ({
   async importRecords(recs) {
     // Idempotent merge by id — used by the demo-data loader (fixed seed ids so
     // sample cases can reference their CIO).
+    if (!get().loaded) await get().load();
     const cur = get().officers;
     const missing = recs.filter((r) => !cur.some((o) => o.id === r.id));
     if (!missing.length) return;

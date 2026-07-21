@@ -28,11 +28,11 @@ const FIELD_LABEL: Record<SearchField, string> = {
 const FIELD_BADGE: Record<SearchField, string> = {
   watchlist: "border-critical/50 bg-critical/15 text-critical",
   firNumber: "border-court/40 bg-court/15 text-court",
-  request: "border-violet-500/40 bg-violet-500/15 text-violet-300",
+  request: "border-violet-500/40 bg-violet-100 text-violet-900",
   accused: "border-court/40 bg-court/15 text-court",
   identity: "border-line bg-surface-3 text-ink-dim",
   section: "border-statutory/40 bg-statutory/15 text-statutory",
-  court: "border-slate-500/40 bg-slate-500/15 text-slate-300",
+  court: "border-slate-500/40 bg-slate-200 text-slate-700",
   date: "border-line bg-surface-3 text-ink-dim",
 };
 

@@ -27,18 +27,19 @@ export const ACCUSED_STATUS_ORDER: AccusedStatus[] = [
 ];
 
 export const ACCUSED_STATUS_META: Record<AccusedStatus, AccusedStatusMeta> = {
-  police_custody: { label: "Police custody", badge: "bg-amber-500/15 text-amber-300 border-amber-500/30", meaning: "Currently in police custody." },
-  judicial_custody: { label: "Judicial custody", badge: "bg-blue-500/15 text-blue-300 border-blue-500/30", meaning: "Currently in judicial custody." },
-  not_arrested: { label: "Not arrested", badge: "bg-slate-500/15 text-slate-300 border-slate-500/30", meaning: "Named but not yet arrested." },
-  absconding: { label: "Absconding", badge: "bg-red-500/15 text-red-300 border-red-500/30", meaning: "Evading arrest / whereabouts unknown." },
-  killed: { label: "Killed / Dead", badge: "bg-zinc-600/25 text-zinc-200 border-zinc-500/40", meaning: "Deceased." },
-  surrendered: { label: "Surrendered", badge: "bg-teal-500/15 text-teal-300 border-teal-500/30", meaning: "Voluntarily surrendered." },
-  approver: { label: "Approver", badge: "bg-violet-500/15 text-violet-300 border-violet-500/30", meaning: "Turned approver / prosecution witness." },
-  charge_sheeted: { label: "Charge-sheeted", badge: "bg-green-500/15 text-green-300 border-green-500/30", meaning: "Charge sheet filed against the accused." },
-  under_investigation: { label: "Under investigation", badge: "bg-yellow-500/15 text-yellow-200 border-yellow-500/30", meaning: "Role still under investigation." },
-  acquitted: { label: "Acquitted", badge: "bg-sky-500/15 text-sky-300 border-sky-500/30", meaning: "Court tried and found not guilty." },
-  convicted: { label: "Convicted", badge: "bg-rose-500/15 text-rose-300 border-rose-500/30", meaning: "Court tried and convicted — record sentence + appeal window (V4-DELTA Q3)." },
-  dropped: { label: "Dropped", badge: "bg-stone-500/15 text-stone-300 border-stone-500/30", meaning: "Name removed / not sent for trial (e.g. insufficient evidence, FR closure)." },
+  // Ledger light theme (design-direction §1): dark text on tinted paper pills.
+  police_custody: { label: "Police custody", badge: "bg-amber-100 text-amber-900 border-amber-700/30", meaning: "Currently in police custody." },
+  judicial_custody: { label: "Judicial custody", badge: "bg-blue-100 text-blue-900 border-blue-700/30", meaning: "Currently in judicial custody." },
+  not_arrested: { label: "Not arrested", badge: "bg-stone-100 text-stone-700 border-stone-400/40", meaning: "Named but not yet arrested." },
+  absconding: { label: "Absconding", badge: "bg-red-100 text-red-900 border-red-700/30", meaning: "Evading arrest / whereabouts unknown." },
+  killed: { label: "Killed / Dead", badge: "bg-zinc-200 text-zinc-800 border-zinc-500/40", meaning: "Deceased." },
+  surrendered: { label: "Surrendered", badge: "bg-teal-100 text-teal-900 border-teal-700/30", meaning: "Voluntarily surrendered." },
+  approver: { label: "Approver", badge: "bg-violet-100 text-violet-900 border-violet-700/30", meaning: "Turned approver / prosecution witness." },
+  charge_sheeted: { label: "Charge-sheeted", badge: "bg-green-100 text-green-900 border-green-700/30", meaning: "Charge sheet filed against the accused." },
+  under_investigation: { label: "Under investigation", badge: "bg-yellow-100 text-yellow-900 border-yellow-700/30", meaning: "Role still under investigation." },
+  acquitted: { label: "Acquitted", badge: "bg-sky-100 text-sky-900 border-sky-700/30", meaning: "Court tried and found not guilty." },
+  convicted: { label: "Convicted", badge: "bg-rose-100 text-rose-900 border-rose-700/30", meaning: "Court tried and convicted — record sentence + appeal window (V4-DELTA Q3)." },
+  dropped: { label: "Dropped", badge: "bg-stone-200 text-stone-700 border-stone-400/40", meaning: "Name removed / not sent for trial (e.g. insufficient evidence, FR closure)." },
 };
 
 /** Fallback so a stale/unknown persisted status never hard-crashes the UI. */

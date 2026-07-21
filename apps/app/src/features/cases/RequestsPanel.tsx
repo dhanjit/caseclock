@@ -90,7 +90,7 @@ export function RequestsPanel({
           return (
             <div key={r.id} className={`rounded-xl p-2.5 ${overdue ? "bg-critical/10 ring-1 ring-critical/40" : "bg-surface-3/40"}`}>
               <div className="flex items-center gap-2 text-sm">
-                <span className="shrink-0 rounded-md border border-violet-500/30 bg-violet-500/15 px-1.5 py-0.5 text-[11px] text-violet-300">
+                <span className="shrink-0 rounded-md border border-violet-500/30 bg-violet-100 px-1.5 py-0.5 text-[11px] text-violet-900">
                   {processRequestLabel(r)}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-ink-dim">

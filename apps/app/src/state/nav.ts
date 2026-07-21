@@ -7,6 +7,7 @@ export type View =
   | { kind: "mindmap"; id: string }
   | { kind: "search"; q?: string }
   | { kind: "review" }
+  | { kind: "cio" }
   | { kind: "settings" };
 
 interface NavState {

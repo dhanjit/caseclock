@@ -2,7 +2,8 @@ import { useMemo } from "react";
 import { useCases } from "@/state/cases";
 import { useNav } from "@/state/nav";
 import { buildAgenda, casesNeedingAttention, quickStats, type AgendaItem } from "@/rules/agenda";
-import { DEFAULT_SETTINGS } from "@/domain/types";
+import { CASE_CATEGORIES, CASE_CATEGORY_META, DEFAULT_SETTINGS } from "@/domain/types";
+import { integrityGaps, type IntegrityGap } from "@/domain/integrity";
 import { loadSampleData } from "@/state/seed";
 import { todayISO } from "@/rules/dates";
 import { caseLabel, relativeDays } from "@/lib/format";
@@ -25,7 +26,7 @@ export function Dashboard() {
   const demoActive = useOnboarding((s) => s.demoActive);
   const today = todayISO();
 
-  const { agenda, attention, stats, superior, priorityCases, loudOverdue, silentOverdue } = useMemo(() => {
+  const { agenda, attention, stats, superior, priorityCases, loudOverdue, silentOverdue, catCounts, gaps } = useMemo(() => {
     const ag = buildAgenda(aggregates, DEFAULT_SETTINGS, today);
     const allItems = [...ag.overdue, ...ag.today, ...ag.upcoming];
     const itemsByCase = new Map<string, AgendaItem[]>();
@@ -45,6 +46,16 @@ export function Dashboard() {
           next: items.find((i) => i.bucket !== "overdue") ?? items[0] ?? null,
         };
       });
+    // Cat I–V strip (V4-DELTA Q8) + integrity checks (V6: "silence is not safety").
+    const catCounts = CASE_CATEGORIES.map((k) => ({
+      key: k,
+      ...CASE_CATEGORY_META[k],
+      count: aggregates.filter((a) => (a.case.category ?? "I") === k).length,
+    }));
+    const live = aggregates.filter((a) => a.case.status !== "closed");
+    const gaps: (IntegrityGap & { caseLabel: string })[] = live.flatMap((a) =>
+      integrityGaps(a, today).map((g) => ({ ...g, caseLabel: caseLabel(a.case) })),
+    );
     return {
       agenda: ag,
       attention: casesNeedingAttention(aggregates, DEFAULT_SETTINGS, today),
@@ -54,6 +65,8 @@ export function Dashboard() {
       // §1 — priority cases shout (RED); lighter cases are monitored silently.
       loudOverdue: ag.overdue.filter((i) => !i.silent),
       silentOverdue: ag.overdue.filter((i) => i.silent),
+      catCounts,
+      gaps,
     };
   }, [aggregates, today]);
 
@@ -83,6 +96,46 @@ export function Dashboard() {
         </div>
       ) : (
         <>
+          {/* Cases by category — Cat I–V supervision strip (V4-DELTA Q8 / V6) */}
+          <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
+            {catCounts.map((cat) => (
+              <div key={cat.key} className="rounded-lg border border-line bg-surface-2 px-2.5 py-2" title={cat.label}>
+                <p className="truncate font-mono text-[9.5px] uppercase tracking-wider text-ink-dim">{cat.short}</p>
+                <p className="mt-0.5 font-mono text-xl font-bold">{cat.count}</p>
+              </div>
+            ))}
+            <div className="rounded-lg border border-ink/60 bg-surface-3 px-2.5 py-2">
+              <p className="font-mono text-[9.5px] uppercase tracking-wider text-ink-dim">Total</p>
+              <p className="mt-0.5 font-mono text-xl font-bold">{aggregates.length}</p>
+            </div>
+          </div>
+
+          {/* Integrity checks — "silence is not safety" (V4-DELTA §2 / V6) */}
+          {gaps.length > 0 && (
+            <div className="mt-3 rounded-xl border-l-4 border-critical bg-red-bg/50 p-3">
+              <p className="eyebrow mb-2 !text-critical">⚠ Integrity checks — silence is not safety</p>
+              <div className="space-y-1.5">
+                {gaps.slice(0, 8).map((g, i) => (
+                  <button
+                    key={`${g.caseId}:${i}`}
+                    onClick={() => open(g.caseId)}
+                    className="flex w-full items-start gap-2 text-left text-[13px] leading-snug hover:underline"
+                  >
+                    <span
+                      className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wide text-white ${g.kind === "next-date" ? "bg-critical" : "bg-statutory"}`}
+                    >
+                      {g.kind === "next-date" ? "Next date?" : "Clock not running"}
+                    </span>
+                    <span>
+                      <b className="font-mono text-[12px]">{g.caseLabel}</b> — {g.text}
+                    </span>
+                  </button>
+                ))}
+                {gaps.length > 8 && <p className="text-[11px] text-ink-dim">+{gaps.length - 8} more — open the cases to resolve.</p>}
+              </div>
+            </div>
+          )}
+
           {/* Priority cases — pinned to the top with full detail (§1) */}
           {priorityCases.length > 0 && (
             <div className="mt-5 rounded-xl border-2 border-statutory/50 bg-statutory/5 p-2">
@@ -120,7 +173,7 @@ export function Dashboard() {
               <div className="mt-1 space-y-1">
                 {superior.map((it) => (
                   <AgendaRow
-                    key={`sup:${it.caseId}:${it.deadline.ruleId}:${it.deadline.occurrenceDate ?? ""}`}
+                    key={`sup:${it.caseId}:${it.deadline.ruleId}:${it.deadline.occurrenceDate ?? ""}:${it.deadline.instanceId ?? ""}`}
                     item={it}
                     today={today}
                     onOpen={open}
@@ -140,7 +193,7 @@ export function Dashboard() {
                 <div className="space-y-1">
                   {agenda.today.map((it) => (
                     <AgendaRow
-                      key={`${it.caseId}:${it.deadline.ruleId}:${it.deadline.occurrenceDate ?? ""}`}
+                      key={`${it.caseId}:${it.deadline.ruleId}:${it.deadline.occurrenceDate ?? ""}:${it.deadline.instanceId ?? ""}`}
                       item={it}
                       today={today}
                       onOpen={open}
@@ -176,7 +229,7 @@ export function Dashboard() {
                 <div className="space-y-1">
                   {agenda.upcoming.slice(0, 12).map((it) => (
                     <AgendaRow
-                      key={`${it.caseId}:${it.deadline.ruleId}:${it.deadline.occurrenceDate ?? ""}`}
+                      key={`${it.caseId}:${it.deadline.ruleId}:${it.deadline.occurrenceDate ?? ""}:${it.deadline.instanceId ?? ""}`}
                       item={it}
                       today={today}
                       onOpen={open}
@@ -214,7 +267,7 @@ export function Dashboard() {
               <div className="mt-1 space-y-1">
                 {loudOverdue.map((it) => (
                   <AgendaRow
-                    key={`${it.caseId}:${it.deadline.ruleId}:${it.deadline.occurrenceDate ?? ""}`}
+                    key={`${it.caseId}:${it.deadline.ruleId}:${it.deadline.occurrenceDate ?? ""}:${it.deadline.instanceId ?? ""}`}
                     item={it}
                     today={today}
                     onOpen={open}
@@ -233,7 +286,7 @@ export function Dashboard() {
               <div className="mt-1 space-y-1 opacity-70">
                 {silentOverdue.map((it) => (
                   <AgendaRow
-                    key={`silent:${it.caseId}:${it.deadline.ruleId}:${it.deadline.occurrenceDate ?? ""}`}
+                    key={`silent:${it.caseId}:${it.deadline.ruleId}:${it.deadline.occurrenceDate ?? ""}:${it.deadline.instanceId ?? ""}`}
                     item={it}
                     today={today}
                     onOpen={open}

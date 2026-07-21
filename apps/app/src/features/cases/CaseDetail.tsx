@@ -7,6 +7,7 @@ import { diffDays, todayISO } from "@/rules/dates";
 import {
   DEFAULT_SETTINGS,
   type CaseRecord,
+  type ChargesheetRecord,
   type DeadlineEvent,
   type EvidenceRecord,
   type HearingRecord,
@@ -149,10 +150,15 @@ export function CaseDetail({ id }: { id: string }) {
   async function saveRequests(processRequests: ProcessRequestRecord[]) {
     await patch(id, (a) => ({ ...a, processRequests, case: { ...a.case, lastTouchedAt: today } }));
   }
+  async function saveChargesheets(chargesheets: ChargesheetRecord[]) {
+    // chargesheetFiledDate re-derives from the register on save (hydrateAggregate).
+    await patch(id, (a) => ({ ...a, chargesheets, case: { ...a.case, lastTouchedAt: today } }));
+  }
   async function togglePriority() {
     if (!agg) return;
-    const { priorityCount, overCap } = await setPriority(id, !agg.case.priority);
-    setPriorityWarn(overCap ? `${priorityCount} cases are flagged priority — the recommended cap is ~10. Consider demoting a quieter one.` : null);
+    const { blocked } = await setPriority(id, !agg.case.priority);
+    // V6 hard cap: "Priority capped at 10 cases. Demote one first."
+    setPriorityWarn(blocked ? "Priority is capped at 10 cases. Demote one first." : null);
   }
   function exportCaseIcs() {
     if (!agg) return;
@@ -231,7 +237,7 @@ export function CaseDetail({ id }: { id: string }) {
               <dd className="text-ink">
                 {clocks.length ? (
                   clocks.slice(0, 3).map((d, i) => (
-                    <span key={`${d.ruleId}:${d.occurrenceDate ?? ""}`}>
+                    <span key={`${d.ruleId}:${d.occurrenceDate ?? ""}:${d.instanceId ?? ""}`}>
                       {i > 0 ? " · " : ""}
                       {d.type} {d.dueAt ? relativeDays(d.dueAt, today) : ""}
                     </span>
@@ -260,14 +266,14 @@ export function CaseDetail({ id }: { id: string }) {
         ) : (
           <div className="space-y-1.5">
             {clocks.map((d) => (
-              <ClockRow key={`${d.ruleId}:${d.occurrenceDate ?? ""}`} d={d} today={today} />
+              <ClockRow key={`${d.ruleId}:${d.occurrenceDate ?? ""}:${d.instanceId ?? ""}`} d={d} today={today} />
             ))}
           </div>
         )}
       </Section>
 
       {/* The officer's 13-heading case file + the 11-status accused list */}
-      <CaseFile agg={agg} onSaveCase={saveCase} />
+      <CaseFile agg={agg} onSaveCase={saveCase} onSaveChargesheets={saveChargesheets} />
       <AccusedPanel agg={agg} onSavePersons={savePersons} />
 
       {/* The two engines: investigation (FR/PR/custody) + court-trial (timeline + hearings) */}

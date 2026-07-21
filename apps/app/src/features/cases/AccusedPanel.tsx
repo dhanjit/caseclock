@@ -1,7 +1,10 @@
 /**
- * Accused panel (REQUIREMENTS §6 / heading 12) — manage the accused list with
- * the officer's 11-value status, plus per-accused LOC/Interpol notices and custody
- * history (§5 / §4.1). Names auto-highlight against the watchlist.
+ * Accused panel (REQUIREMENTS §11 / heading 12 + V4-DELTA N6/N7, V7-8) — the
+ * officer's 12-value status roster with per-accused clocks: arrest date (the FR
+ * anchor), custody-end (production reminder), live bail matter, LOC/Interpol
+ * notices, custody history, and the conviction sub-record (sentence + appeal
+ * window). Rows are edit-only — the roster is a record, not a scratchpad.
+ * Names auto-highlight against the watchlist.
  */
 
 import { useState } from "react";
@@ -32,8 +35,11 @@ export function AccusedPanel({
   const onWatch = (name: string) => watchNames.some((x) => x.toLowerCase() === name.toLowerCase());
   const [newName, setNewName] = useState("");
   const [newStatus, setNewStatus] = useState<AccusedStatus>("not_arrested");
+  const [newArrest, setNewArrest] = useState(""); // V7-8: arrest date entered up front
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const needsArrestDate = (s: AccusedStatus | undefined) =>
+    s === "police_custody" || s === "judicial_custody" || s === "charge_sheeted";
 
   async function commit(next: PersonRecord[]) {
     setBusy(true);
@@ -51,14 +57,15 @@ export function AccusedPanel({
       role: "accused",
       name: newName.trim(),
       accusedStatus: newStatus,
+      arrestDate: newArrest || null,
     };
     await commit([...accused, p]);
     setNewName("");
     setNewStatus("not_arrested");
+    setNewArrest("");
   }
   const update = (id: string, patch: Partial<PersonRecord>) =>
     commit(accused.map((p) => (p.id === id ? { ...p, ...patch } : p)));
-  const remove = (id: string) => commit(accused.filter((p) => p.id !== id));
 
   const addLoc = (p: PersonRecord) => update(p.id, { loc: [...(p.loc ?? []), { id: newId("loc"), type: "LOC" }] });
   const updLoc = (p: PersonRecord, id: string, patch: Partial<LocNotice>) =>
@@ -72,7 +79,7 @@ export function AccusedPanel({
     update(p.id, { custodyHistory: (p.custodyHistory ?? []).filter((h) => h.id !== id) });
 
   return (
-    <Section title="Accused" hint={`${accused.length} · 11-status`} className="mt-3">
+    <Section title="Accused" hint={`${accused.length} · 12-status · edit-only`} className="mt-3">
       <div className="space-y-2">
         {accused.map((p) => (
           <div key={p.id} className="rounded-xl bg-surface-3/40 p-2.5">
@@ -98,9 +105,6 @@ export function AccusedPanel({
               ) : (
                 <span className="text-xs text-critical" title="On watchlist">⚑</span>
               )}
-              <button onClick={() => remove(p.id)} className="text-xs text-soft hover:text-critical" title="Remove">
-                ✕
-              </button>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <select
@@ -126,6 +130,90 @@ export function AccusedPanel({
                 LOC / custody {expanded === p.id ? "▾" : "▸"}
               </button>
             </div>
+            {/* Per-accused clocks (V4-DELTA N6 / V7-8): arrest anchors FR; custody end
+                fires the 1-day-prior production reminder; bail date raises a BAIL row. */}
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+              <label className="flex items-center gap-1.5 text-xs text-ink-dim">
+                Arrested
+                <input
+                  type="date"
+                  className={`${input} py-1`}
+                  value={p.arrestDate ?? ""}
+                  onChange={(e) => update(p.id, { arrestDate: e.target.value || null })}
+                  aria-label={`${p.name} arrest date`}
+                />
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-ink-dim">
+                Custody ends
+                <input
+                  type="date"
+                  className={`${input} py-1`}
+                  value={p.custodyEndDate ?? ""}
+                  onChange={(e) => update(p.id, { custodyEndDate: e.target.value || null })}
+                  aria-label={`${p.name} custody end date`}
+                />
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-ink-dim">
+                <input
+                  type="checkbox"
+                  checked={!!p.bailPending}
+                  onChange={(e) => update(p.id, { bailPending: e.target.checked })}
+                />
+                Bail pending
+              </label>
+              {p.bailPending && (
+                <input
+                  type="date"
+                  className={`${input} py-1`}
+                  value={p.bailDate ?? ""}
+                  onChange={(e) => update(p.id, { bailDate: e.target.value || null })}
+                  aria-label={`${p.name} bail hearing date`}
+                  title="Bail hearing date — raises a BAIL deadline"
+                />
+              )}
+              <input
+                className={`${input} min-w-36 flex-1 py-1`}
+                value={p.othersNote ?? ""}
+                onChange={(e) => update(p.id, { othersNote: e.target.value || undefined })}
+                placeholder="Others — LOC / MLA / Interpol note"
+                aria-label={`${p.name} other notes`}
+              />
+            </div>
+            {needsArrestDate(p.accusedStatus) && !p.arrestDate && (
+              <p className="mt-1.5 rounded border border-statutory/40 bg-brass-bg px-2 py-1 text-[11px] text-statutory">
+                ⚠ CLOCK NOT RUNNING — in custody / charge-sheeted but no arrest date; the FR &amp; custody clocks can't start.
+              </p>
+            )}
+            {p.accusedStatus === "convicted" && (
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 rounded border-l-4 border-critical/60 bg-red-bg/60 px-2 py-1.5">
+                <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-critical">Convicted</span>
+                <input
+                  className={`${input} min-w-40 flex-1 py-1`}
+                  value={p.sentence ?? ""}
+                  onChange={(e) => update(p.id, { sentence: e.target.value || undefined })}
+                  placeholder="Sentence / quantum (e.g. life u/s 16 UAPA)"
+                />
+                <label className="flex items-center gap-1.5 text-xs text-ink-dim">
+                  Sentenced
+                  <input
+                    type="date"
+                    className={`${input} py-1`}
+                    value={p.sentenceDate ?? ""}
+                    onChange={(e) => update(p.id, { sentenceDate: e.target.value || null })}
+                  />
+                </label>
+                <label className="flex items-center gap-1.5 text-xs text-ink-dim">
+                  Appeal by
+                  <input
+                    type="date"
+                    className={`${input} py-1`}
+                    value={p.appealBy ?? ""}
+                    onChange={(e) => update(p.id, { appealBy: e.target.value || null })}
+                    title="Blank = forum-accurate default window from the sentence date"
+                  />
+                </label>
+              </div>
+            )}
 
             {expanded === p.id && (
               <div className="mt-2 space-y-2 border-t border-line/50 pt-2">
@@ -187,10 +275,21 @@ export function AccusedPanel({
             </option>
           ))}
         </select>
+        <input
+          type="date"
+          className={input}
+          value={newArrest}
+          onChange={(e) => setNewArrest(e.target.value)}
+          aria-label="Date of arrest"
+          title="Date of arrest — starts the FR & custody clocks (enter first)"
+        />
         <button onClick={add} disabled={!newName.trim() || busy} className={`${btn("primary")} disabled:opacity-40`}>
           Add
         </button>
       </div>
+      {needsArrestDate(newStatus) && !newArrest && (
+        <p className="mt-1.5 text-[11px] text-statutory">The chosen status implies arrest — enter the arrest date so the FR clock starts.</p>
+      )}
     </Section>
   );
 }

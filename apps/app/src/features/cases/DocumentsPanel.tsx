@@ -31,10 +31,10 @@ const sInput = "w-full rounded-lg border border-line bg-surface-2 px-2 py-1 text
 const SOURCE_BADGE: Record<DocumentSource, string> = {
   manual: "border-line bg-surface-3 text-ink-dim",
   index: "border-ok/40 bg-ok/15 text-ok",
-  filename: "border-slate-500/40 bg-slate-500/15 text-slate-300",
+  filename: "border-slate-500/40 bg-slate-200 text-slate-700",
   pdftext: "border-court/40 bg-court/15 text-court",
   ocr: "border-statutory/40 bg-statutory/15 text-statutory",
-  llm: "border-violet-500/40 bg-violet-500/15 text-violet-300",
+  llm: "border-violet-500/40 bg-violet-100 text-violet-900",
 };
 
 function emptyManual(): DocumentDraft {

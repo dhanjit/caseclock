@@ -224,9 +224,18 @@ current-month-only PR check.
 > (statutory-correct 90→180 gating vs the officer's flat 150) remains recorded
 > as intentional.
 >
-> **T3 remains**: calendar view, H8/H13 dated logs + routing, dashboard heat
-> tiles, .doc export, full edit-only sweep, witness re-rank/examined,
-> documents-register rework, dark mode + the deferred review items above.
+> **2026-07-22: T1+T2 MERGED & DEPLOYED** to app.caseclock.dhanjit.me, then
+> **T3 SHIPPED & DEPLOYED** (commits e34e081..c4aefa7, merge c580dc3):
+> calendar view (month grid + agenda + .ics), H8/H13 dated logs with
+> Court-tag routing + legacy-text migration, PW witness panel
+> (relevance/examined/re-rank), .doc briefing export, dashboard heat tiles +
+> DORMANT in the integrity card, per-case integrity card with one-tap
+> NEXT-DATE rollover, grouped + query-marked search incl. comms identifiers,
+> dark ledger theme, configurable dormancy threshold, two-step delete
+> confirms on hearings/requests. Remaining (minor, unscheduled):
+> documents-register rework (existing DocumentsPanel judged sufficient for
+> now), case-index register view variant, gallery/attachment delete
+> confirms.
 
 1. **T1 — spines** (schema migration + low-risk extensions): chargesheet
    register · per-accused arrest/bail · conviction + appeal (Q3/Q7) · integrity

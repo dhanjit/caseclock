@@ -2,7 +2,8 @@ import { useMemo } from "react";
 import { useCases } from "@/state/cases";
 import { useNav } from "@/state/nav";
 import { buildAgenda, casesNeedingAttention, quickStats, type AgendaItem } from "@/rules/agenda";
-import { CASE_CATEGORIES, CASE_CATEGORY_META, DEFAULT_SETTINGS } from "@/domain/types";
+import { CASE_CATEGORIES, CASE_CATEGORY_META } from "@/domain/types";
+import { useAppSettings } from "@/state/app-settings";
 import { integrityGaps, type IntegrityGap } from "@/domain/integrity";
 import { loadSampleData } from "@/state/seed";
 import { todayISO } from "@/rules/dates";
@@ -63,10 +64,11 @@ export function Dashboard() {
   const aggregates = useCases((s) => s.aggregates);
   const go = useNav((s) => s.go);
   const demoActive = useOnboarding((s) => s.demoActive);
+  const settings = useAppSettings((s) => s.settings);
   const today = todayISO();
 
   const { agenda, attention, stats, superior, priorityCases, monitoredCases, loudOverdue, silentOverdue, catCounts, gaps } = useMemo(() => {
-    const ag = buildAgenda(aggregates, DEFAULT_SETTINGS, today);
+    const ag = buildAgenda(aggregates, settings, today);
     const allItems = [...ag.overdue, ...ag.today, ...ag.upcoming];
     const itemsByCase = new Map<string, AgendaItem[]>();
     for (const it of allItems) {
@@ -101,7 +103,7 @@ export function Dashboard() {
     );
     return {
       agenda: ag,
-      attention: casesNeedingAttention(aggregates, DEFAULT_SETTINGS, today),
+      attention: casesNeedingAttention(aggregates, settings, today),
       stats: quickStats(aggregates, today),
       superior: allItems.filter((i) => i.deadline.track === "superior"),
       priorityCases,
@@ -112,7 +114,7 @@ export function Dashboard() {
       catCounts,
       gaps,
     };
-  }, [aggregates, today]);
+  }, [aggregates, settings, today]);
 
   const open = (id: string) => go({ kind: "case", id });
 

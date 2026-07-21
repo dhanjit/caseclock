@@ -34,6 +34,7 @@ export function HearingsPanel({
   onSaveHearings: (hearings: HearingRecord[]) => Promise<void>;
 }) {
   const [date, setDate] = useState("");
+  const [removeArm, setRemoveArm] = useState<string | null>(null);
   const [purpose, setPurpose] = useState<HearingRecord["purpose"]>("trial");
   const [superior, setSuperior] = useState(false);
   const [forum, setForum] = useState<"SC" | "HC">("HC");
@@ -88,7 +89,15 @@ export function HearingsPanel({
             >
               {h.disposed ? "disposed" : "mark done"}
             </button>
-            <button onClick={() => remove(h.id)} className="text-xs text-soft hover:text-critical">✕</button>
+            {removeArm === h.id ? (
+              <span className="flex shrink-0 items-center gap-1">
+                <span className="text-[10px] font-semibold text-critical">Delete?</span>
+                <button onClick={() => { void remove(h.id); setRemoveArm(null); }} className="rounded bg-critical px-2 py-1 text-[11px] font-semibold text-white">Delete</button>
+                <button onClick={() => setRemoveArm(null)} className="rounded border border-line px-2 py-1 text-[11px]">Keep</button>
+              </span>
+            ) : (
+              <button onClick={() => setRemoveArm(h.id)} className="px-1.5 py-1 text-xs text-soft hover:text-critical" title="Remove hearing (prefer dispose — the record is preserved)" aria-label="Remove hearing">✕</button>
+            )}
           </div>
         ))}
         {sorted.length === 0 && <p className="py-2 text-center text-sm text-soft">No hearings yet</p>}

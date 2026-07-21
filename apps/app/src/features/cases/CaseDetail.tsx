@@ -5,7 +5,6 @@ import { useSession } from "@/state/session";
 import { computeDeadlines } from "@/rules/engine";
 import { diffDays, todayISO } from "@/rules/dates";
 import {
-  DEFAULT_SETTINGS,
   type CaseRecord,
   type ChargesheetRecord,
   type CommsRequestRecord,
@@ -23,6 +22,7 @@ import {
 import { buildBriefing } from "@/domain/briefing";
 import { useCio } from "@/state/cio";
 import { useWatchlist } from "@/state/watchlist";
+import { useAppSettings } from "@/state/app-settings";
 import { newId } from "@/lib/id";
 import { fmtDate, relativeDays, severityTone, toneText } from "@/lib/format";
 import { Section, Field, Dot } from "@/features/components/bits";
@@ -31,6 +31,7 @@ import { TopBar, btn } from "@/features/components/TopBar";
 import { CaseFile } from "./CaseFile";
 import { AccusedPanel } from "./AccusedPanel";
 import { WitnessPanel } from "./WitnessPanel";
+import { IntegrityCard } from "./IntegrityCard";
 import { InvestigationPanel } from "./InvestigationPanel";
 import { PipelinePanel } from "./PipelinePanel";
 import { CommsPanel } from "./CommsPanel";
@@ -67,6 +68,7 @@ export function CaseDetail({ id }: { id: string }) {
   const setPriority = useCases((s) => s.setPriority);
   const go = useNav((s) => s.go);
   const lock = useSession((s) => s.lock);
+  const settings = useAppSettings((s) => s.settings);
   const today = todayISO();
 
   const [noteText, setNoteText] = useState("");
@@ -85,7 +87,7 @@ export function CaseDetail({ id }: { id: string }) {
             agg.case,
             agg.persons,
             agg.hearings,
-            DEFAULT_SETTINGS,
+            settings,
             today,
             agg.evidence ?? [],
             agg.processRequests ?? [],
@@ -94,7 +96,7 @@ export function CaseDetail({ id }: { id: string }) {
             agg.chargesheets ?? [],
           )
         : [],
-    [agg, today],
+    [agg, settings, today],
   );
 
   if (!agg) {
@@ -198,7 +200,7 @@ export function CaseDetail({ id }: { id: string }) {
   }
   function exportCaseIcs() {
     if (!agg) return;
-    const ics = buildCaseIcs(agg, DEFAULT_SETTINGS, today);
+    const ics = buildCaseIcs(agg, settings, today);
     const safe = c.firNumber.replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "case";
     downloadFile(`caseclock-${safe}.ics`, ics, "text/calendar;charset=utf-8");
   }
@@ -262,6 +264,7 @@ export function CaseDetail({ id }: { id: string }) {
         <p className="mt-2 rounded-lg border border-statutory/40 bg-statutory/10 px-3 py-2 text-xs text-statutory">⚠ {priorityWarn}</p>
       )}
       {printing && <BriefingNote agg={agg} onDone={() => setPrinting(false)} />}
+      <IntegrityCard agg={agg} onSaveHearings={saveHearings} />
 
       {/* Context-restore header */}
       {(gapDays >= 3 || latest) && (

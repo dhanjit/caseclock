@@ -1,5 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { applyStoredThemeEarly } from "@/state/app-settings";
 import App from "./app";
 import "./index.css";
 import { useSession } from "@/state/session";
@@ -22,6 +23,8 @@ void initNative();
 
 const rootEl = document.getElementById("root");
 if (!rootEl) throw new Error("Root element #root not found");
+
+applyStoredThemeEarly();
 
 createRoot(rootEl).render(
   <StrictMode>

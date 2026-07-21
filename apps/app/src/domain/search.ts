@@ -150,6 +150,14 @@ export function searchCases(
       for (const l of p.loc ?? []) consider("request", l.ref, l.ref ? `${l.type} ${l.ref}` : undefined);
     }
 
+    // Comms identifiers (T3 / V6): phone numbers & IMEIs from the CDR/IPDR/IMEI
+    // registers — punctuation-tolerant via normNum, so "7002944810" finds
+    // "70029-44810". Letter refs too.
+    for (const r of agg.commsRequests ?? []) {
+      consider("request", r.ref, `${r.kind.toUpperCase()} ${r.ref}`);
+      for (const v of r.numbers ?? []) consider("request", v, `${r.kind.toUpperCase()} ${v} · ${r.ref}`);
+    }
+
     // Banned-org / watchlist — closed vocabulary detected across the case's full text.
     if (watchlistNames.length) {
       const corpus = [

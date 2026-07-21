@@ -8,7 +8,8 @@ import { useMemo, useState } from "react";
 import { useCases } from "@/state/cases";
 import { useNav } from "@/state/nav";
 import { computeDeadlines } from "@/rules/engine";
-import { DEFAULT_SETTINGS, type DeadlineEvent } from "@/domain/types";
+import type { DeadlineEvent } from "@/domain/types";
+import { useAppSettings } from "@/state/app-settings";
 import { buildAllCasesIcs } from "@/domain/ics";
 import { diffDays, todayISO, type ISODate } from "@/rules/dates";
 import { fmtDate, relativeDays, severityTone, toneText } from "@/lib/format";
@@ -32,6 +33,7 @@ const TRACK_DOT: Record<string, string> = {
 export function CalendarView() {
   const aggregates = useCases((s) => s.aggregates);
   const go = useNav((s) => s.go);
+  const settings = useAppSettings((s) => s.settings);
   const today = todayISO();
   const [ym, setYm] = useState(() => ({ y: Number(today.slice(0, 4)), m: Number(today.slice(5, 7)) - 1 }));
 
@@ -40,7 +42,7 @@ export function CalendarView() {
     for (const agg of aggregates) {
       if (agg.case.status === "closed") continue;
       const ds = computeDeadlines(
-        agg.case, agg.persons, agg.hearings, DEFAULT_SETTINGS, today,
+        agg.case, agg.persons, agg.hearings, settings, today,
         agg.evidence ?? [], agg.processRequests ?? [], agg.commsRequests ?? [],
         agg.towerDumps ?? [], agg.chargesheets ?? [],
       );
@@ -51,7 +53,7 @@ export function CalendarView() {
       }
     }
     return out;
-  }, [aggregates, today]);
+  }, [aggregates, settings, today]);
 
   const byDay = useMemo(() => {
     const m = new Map<string, CalEvent[]>();
@@ -79,7 +81,7 @@ export function CalendarView() {
   );
 
   const exportIcs = () => {
-    const ics = buildAllCasesIcs(aggregates, DEFAULT_SETTINGS, today);
+    const ics = buildAllCasesIcs(aggregates, settings, today);
     const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");

@@ -36,6 +36,21 @@ const FIELD_BADGE: Record<SearchField, string> = {
   date: "border-line bg-surface-3 text-ink-dim",
 };
 
+/** Mark the query inside a snippet (T3 / V6 hlText) — case-insensitive, safe. */
+function Marked({ text, q }: { text: string; q: string }) {
+  const query = q.trim();
+  if (!query) return <Highlighted text={text} />;
+  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx < 0) return <Highlighted text={text} />;
+  return (
+    <>
+      <Highlighted text={text.slice(0, idx)} />
+      <mark className="rounded-sm bg-brass-bg px-0.5 text-ink">{text.slice(idx, idx + query.length)}</mark>
+      <Highlighted text={text.slice(idx + query.length)} />
+    </>
+  );
+}
+
 export function SearchView() {
   const aggregates = useCases((s) => s.aggregates);
   const names = useWatchlist((s) => s.names);
@@ -50,6 +65,17 @@ export function SearchView() {
   }, []);
 
   const hits = useMemo(() => searchCases(aggregates, q, names), [aggregates, q, names]);
+  // Grouped by case (T3 / V6 searchAll): case header + its hits beneath, keeping
+  // the score order for the group ordering (best case first).
+  const groups = useMemo(() => {
+    const byCase = new Map<string, { caseLabel: string; hits: typeof hits }>();
+    for (const h of hits) {
+      const g = byCase.get(h.caseId) ?? { caseLabel: h.caseLabel, hits: [] };
+      g.hits.push(h);
+      byCase.set(h.caseId, g);
+    }
+    return [...byCase.entries()].map(([caseId, g]) => ({ caseId, ...g }));
+  }, [hits]);
   const trimmed = q.trim();
 
   return (
@@ -76,31 +102,48 @@ export function SearchView() {
         <p className="mt-1 px-1 text-[11px] text-soft">Structured fields only — never document contents (§9).</p>
       </div>
 
-      <div className="mt-3 space-y-1.5">
+      <div className="mt-3 space-y-2">
         {trimmed === "" ? (
           <p className="py-10 text-center text-sm text-soft">Type to search cases.</p>
         ) : hits.length === 0 ? (
           <p className="py-10 text-center text-sm text-soft">No matches for “{trimmed}”.</p>
         ) : (
-          hits.map((h, i) => (
-            <button
-              key={`${h.caseId}:${h.field}:${i}`}
-              onClick={() => go({ kind: "case", id: h.caseId })}
-              className="flex w-full items-center gap-3 rounded-xl bg-surface-3/50 px-3 py-2.5 text-left hover:bg-surface-3"
-            >
-              <span className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium ${FIELD_BADGE[h.field]}`}>
-                {FIELD_LABEL[h.field]}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm text-ink">
-                  <Highlighted text={h.snippet} />
-                </span>
-                <span className="block truncate text-xs text-ink-dim">
-                  <Highlighted text={h.caseLabel} />
-                </span>
-              </span>
-            </button>
-          ))
+          <>
+            <p className="px-1 font-mono text-[11px] text-ink-dim">
+              {hits.length} hit(s) in {groups.length} case(s)
+            </p>
+            {groups.map((g) => (
+              <div key={g.caseId} className="rounded-xl border border-line bg-surface-2 p-2">
+                <button
+                  onClick={() => go({ kind: "case", id: g.caseId })}
+                  className="flex w-full items-center gap-2 rounded-lg px-1.5 py-1 text-left hover:bg-surface-3"
+                >
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+                    <Marked text={g.caseLabel} q={trimmed} />
+                  </span>
+                  <span className="shrink-0 rounded bg-brass-bg px-1.5 py-0.5 font-mono text-[10px] font-bold text-statutory">
+                    {g.hits.length}
+                  </span>
+                </button>
+                <div className="mt-1 space-y-1">
+                  {g.hits.map((h, i) => (
+                    <button
+                      key={`${h.field}:${i}`}
+                      onClick={() => go({ kind: "case", id: h.caseId })}
+                      className="flex w-full items-center gap-2.5 rounded-lg border-l-2 border-surface-3 px-2 py-1.5 text-left hover:bg-surface-3"
+                    >
+                      <span className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium ${FIELD_BADGE[h.field]}`}>
+                        {FIELD_LABEL[h.field]}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-sm text-ink">
+                        <Marked text={h.snippet} q={trimmed} />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </>
         )}
       </div>
     </div>

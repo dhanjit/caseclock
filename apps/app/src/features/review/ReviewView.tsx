@@ -1,9 +1,9 @@
 import { useMemo } from "react";
+import { useAppSettings } from "@/state/app-settings";
 import { useCases } from "@/state/cases";
 import { useNav } from "@/state/nav";
 import { computeDeadlines } from "@/rules/engine";
 import { diffDays, todayISO } from "@/rules/dates";
-import { DEFAULT_SETTINGS } from "@/domain/types";
 import type { CaseAggregate } from "@/domain/repository";
 import { relativeDays } from "@/lib/format";
 import { Section } from "@/features/components/bits";
@@ -24,7 +24,7 @@ export function ReviewView() {
 
   const groups = useMemo(() => {
     const score = (agg: CaseAggregate) => {
-      const ds = computeDeadlines(agg.case, agg.persons, agg.hearings, DEFAULT_SETTINGS, today, agg.evidence ?? [], agg.processRequests ?? []);
+      const ds = computeDeadlines(agg.case, agg.persons, agg.hearings, useAppSettings.getState().settings, today, agg.evidence ?? [], agg.processRequests ?? [], agg.commsRequests ?? [], agg.towerDumps ?? [], agg.chargesheets ?? []);
       let s = 0;
       if (ds.some((d) => d.ruleId === "review-overdue" && d.state === "overdue")) s += 4;
       if (ds.some((d) => d.ruleId === "untouched")) s += 2;

@@ -94,22 +94,62 @@ describe("officer investigation engine (§4.1) — arrest-anchored custody/FR", 
     expect(find(run(c, "2025-06-10"), "fr1-chargesheet")!.state).toBe("done");
   });
 
-  it("FR chain: SP remarks ≤1wk of FR-II, then the DG-order 7-day hard flag", () => {
-    const c = mk({ arrestDate: "2025-05-01", frIIFiledDate: "2025-08-01", spRemarksDate: "2025-08-05" });
-    const e = run(c, "2025-08-08");
-    expect(find(e, "fr-sp-remarks")!.dueAt).toBe(addDays("2025-08-01", 7));
-    expect(find(e, "fr-sp-remarks")!.state).toBe("done"); // remarks already filed
+  it("FR→MHA pipeline (V4-DELTA Q2): DG ≤7d of FR-I, IR-to-MHA ≤7d of DG, MHA nudge ≤7d of IR", () => {
+    const c = mk({ arrestDate: "2025-05-01", frISubmittedDate: "2025-08-01", dgApprovedDate: "2025-08-05", irForMhaDate: "2025-08-10" });
+    const e = run(c, "2025-08-12");
     const dg = find(e, "fr-dg-order")!;
-    expect(dg.dueAt).toBe(addDays("2025-08-05", 7));
+    expect(dg.dueAt).toBe(addDays("2025-08-01", 7)); // anchored on FR-I submission
+    expect(dg.state).toBe("done"); // DG approval recorded
     expect(dg.severity).toBe("statutory-critical");
-    expect(dg.note).toMatch(/7 days|hard flag/i);
+    const ir = find(e, "fr-ir-mha")!;
+    expect(ir.dueAt).toBe(addDays("2025-08-05", 7));
+    expect(ir.state).toBe("done");
+    const mha = find(e, "mha-sanction-pending")!;
+    expect(mha.dueAt).toBe(addDays("2025-08-10", 7));
+    expect(mha.state).toBe("active");
+    expect(mha.note).toMatch(/blocked|only after MHA/i);
   });
 
-  it("custody production reminder fires off the custody end date (1-day lead)", () => {
-    const c = mk({ arrestDate: "2025-05-01", custodyEndDate: "2025-05-20" });
-    const e = find(run(c, "2025-05-10"), "custody-production")!;
-    expect(e.dueAt).toBe("2025-05-20");
-    expect(e.leadOffsets).toContain(1);
+  it("legacy dgOrderDate still satisfies the DG step and anchors IR-to-MHA", () => {
+    const c = mk({ frISubmittedDate: "2025-08-01", dgOrderDate: "2025-08-04" });
+    const e = run(c, "2025-08-06");
+    expect(find(e, "fr-dg-order")!.state).toBe("done");
+    expect(find(e, "fr-ir-mha")!.dueAt).toBe(addDays("2025-08-04", 7));
+  });
+
+  it("SP remarks is UAPA-only, riding the 150-day line from the earliest arrest", () => {
+    const uapa = mk({ uapaFlag: true, uapaExtensionGranted: true, arrestDate: "2025-05-01", frISubmittedDate: "2025-08-01" });
+    const sp = find(run(uapa, "2025-08-08"), "fr-sp-remarks")!;
+    expect(sp.dueAt).toBe(addDays("2025-05-01", 150));
+    const nonUapa = mk({ arrestDate: "2025-05-01", frISubmittedDate: "2025-08-01" });
+    expect(find(run(nonUapa, "2025-08-08"), "fr-sp-remarks")).toBeUndefined();
+  });
+
+  it("FR anchor is the EARLIEST per-accused arrest (V4-DELTA §2), falling back to the case date", () => {
+    const persons: PersonRecord[] = [
+      { id: "a1", caseId: "c1", role: "accused", name: "A-1", accusedStatus: "judicial_custody", arrestDate: "2025-05-03" },
+      { id: "a2", caseId: "c1", role: "accused", name: "A-2", accusedStatus: "police_custody", arrestDate: "2025-05-01" },
+    ];
+    const c = mk({ punishmentBand: "10plus", custodyStatus: "in_custody" }); // no case-level arrestDate
+    const e = find(run(c, "2025-05-10", persons), "fr1-chargesheet")!;
+    expect(e.dueAt).toBe(addDays("2025-05-01", 75)); // earliest accused arrest wins
+    expect(find(run(mk({ punishmentBand: "10plus" }), "2025-05-10"), "fr1-chargesheet")).toBeUndefined(); // no anchor at all → no row
+  });
+
+  it("custody production fans out PER ACCUSED off each custody end date (1-day lead)", () => {
+    const persons: PersonRecord[] = [
+      { id: "a1", caseId: "c1", role: "accused", name: "A-1 (foreign national)", accusedStatus: "police_custody", custodyEndDate: "2025-05-20" },
+      { id: "a2", caseId: "c1", role: "accused", name: "A-2", accusedStatus: "judicial_custody" },
+    ];
+    const rows = run(mk({ arrestDate: "2025-05-01" }), "2025-05-10", persons).filter((d) => d.ruleId === "custody-production");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].dueAt).toBe("2025-05-20");
+    expect(rows[0].type).toMatch(/A-1/);
+    expect(rows[0].instanceId).toBe("a1");
+    expect(rows[0].leadOffsets).toContain(1);
+    // legacy case-level date still fires for old records
+    const legacy = run(mk({ arrestDate: "2025-05-01", custodyEndDate: "2025-05-22" }), "2025-05-10").filter((d) => d.ruleId === "custody-production");
+    expect(legacy[0].dueAt).toBe("2025-05-22");
   });
 
   it("PR: first ≤15d of registration; monthly due by the 7th", () => {
@@ -212,7 +252,7 @@ describe("kept clocks (verified extras)", () => {
   });
 });
 
-describe("expert-report 2-day auto-alert (§4.1)", () => {
+describe("expert-report 7-day auto-alert (V4-DELTA Q1 — supersedes V3's 2-day)", () => {
   const mkEv = (over: Partial<EvidenceRecord>): EvidenceRecord => ({
     id: "ev1",
     caseId: "c1",
@@ -223,22 +263,22 @@ describe("expert-report 2-day auto-alert (§4.1)", () => {
     ...over,
   });
   const expert = (c: CaseRecord, today: string, ev: EvidenceRecord[]) =>
-    find(run(c, today, [], [], ev), "expert-report-2day");
+    find(run(c, today, [], [], ev), "expert-report-pending");
 
   it("day 0 (just forwarded): active, not overdue", () => {
     const e = expert(mk({}), "2025-05-01", [mkEv({ forwardedDate: "2025-05-01" })])!;
     expect(e.state).toBe("active");
-    expect(e.dueAt).toBe(addDays("2025-05-01", 2));
+    expect(e.dueAt).toBe(addDays("2025-05-01", 7));
     expect(e.owes).toBe("FSL");
     expect(e.track).toBe("investigation");
   });
 
-  it("day 1: still active (within the 2-day grace)", () => {
-    expect(expert(mk({}), "2025-05-02", [mkEv({ forwardedDate: "2025-05-01" })])!.state).toBe("active");
+  it("day 6: still active (within the 7-day chase window)", () => {
+    expect(expert(mk({}), "2025-05-07", [mkEv({ forwardedDate: "2025-05-01" })])!.state).toBe("active");
   });
 
-  it("forwarded + 2 days: overdue (RED) — the 2-day boundary fires", () => {
-    expect(expert(mk({}), "2025-05-03", [mkEv({ forwardedDate: "2025-05-01" })])!.state).toBe("overdue");
+  it("forwarded + 7 days: overdue (RED) — the 7-day boundary fires", () => {
+    expect(expert(mk({}), "2025-05-08", [mkEv({ forwardedDate: "2025-05-01" })])!.state).toBe("overdue");
   });
 
   it("marked received: done regardless of how long it ran", () => {
@@ -251,7 +291,7 @@ describe("expert-report 2-day auto-alert (§4.1)", () => {
       mkEv({ id: "e1", reportKind: "other", forwardedDate: "2025-05-01" }),
       mkEv({ id: "e2", reportKind: "expert", forwardedDate: null }),
     ];
-    expect(run(mk({}), "2025-06-01", [], [], evs).filter((d) => d.ruleId === "expert-report-2day")).toHaveLength(0);
+    expect(run(mk({}), "2025-06-01", [], [], evs).filter((d) => d.ruleId === "expert-report-pending")).toHaveLength(0);
   });
 
   it("emits one row per forwarded expert report", () => {
@@ -259,7 +299,64 @@ describe("expert-report 2-day auto-alert (§4.1)", () => {
       mkEv({ id: "e1", forwardedDate: "2025-05-01" }),
       mkEv({ id: "e2", description: "Two foreign passports", forwardedDate: "2025-05-10" }),
     ];
-    expect(run(mk({}), "2025-06-01", [], [], evs).filter((d) => d.ruleId === "expert-report-2day")).toHaveLength(2);
+    expect(run(mk({}), "2025-06-01", [], [], evs).filter((d) => d.ruleId === "expert-report-pending")).toHaveLength(2);
+  });
+});
+
+describe("per-accused bail dates + appeal windows (V4-DELTA N6/N7)", () => {
+  it("a bail-pending accused with a date raises a BAIL row; clears when flipped off", () => {
+    const persons: PersonRecord[] = [
+      { id: "a1", caseId: "c1", role: "accused", name: "A-2 Hiren Das", accusedStatus: "judicial_custody", bailPending: true, bailDate: "2026-07-09" },
+      { id: "a2", caseId: "c1", role: "accused", name: "A-3", accusedStatus: "judicial_custody", bailPending: false, bailDate: "2026-07-09" },
+    ];
+    const rows = run(mk({}), "2026-07-01", persons).filter((d) => d.ruleId === "bail-date-accused");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].type).toMatch(/Hiren Das/);
+    expect(rows[0].dueAt).toBe("2026-07-09");
+    expect(rows[0].track).toBe("court");
+  });
+
+  it("convicted accused: forum-accurate default appeal window from sentence date", () => {
+    const persons: PersonRecord[] = [
+      { id: "a1", caseId: "c1", role: "accused", name: "A-1", accusedStatus: "convicted", sentenceDate: "2026-03-12" },
+    ];
+    // sessions, non-death → 60d
+    const sessions = run(mk({ trialCourtLevel: "sessions" }), "2026-04-01", persons).find((d) => d.ruleId === "appeal-window-accused")!;
+    expect(sessions.dueAt).toBe(addDays("2026-03-12", 60));
+    expect(sessions.note).toMatch(/forum-accurate/);
+    // magistrate → 30d
+    const mag = run(mk({ trialCourtLevel: "magistrate" }), "2026-04-01", persons).find((d) => d.ruleId === "appeal-window-accused")!;
+    expect(mag.dueAt).toBe(addDays("2026-03-12", 30));
+    // unknown forum → 90d fallback marked verify
+    const unk = run(mk({}), "2026-04-01", persons).find((d) => d.ruleId === "appeal-window-accused")!;
+    expect(unk.dueAt).toBe(addDays("2026-03-12", 90));
+    expect(unk.note).toMatch(/VERIFY/);
+  });
+
+  it("an officer-set appeal-by overrides the computed default", () => {
+    const persons: PersonRecord[] = [
+      { id: "a1", caseId: "c1", role: "accused", name: "A-1", accusedStatus: "convicted", sentenceDate: "2026-03-12", appealBy: "2026-05-01" },
+    ];
+    const e = run(mk({ trialCourtLevel: "sessions" }), "2026-04-01", persons).find((d) => d.ruleId === "appeal-window-accused")!;
+    expect(e.dueAt).toBe("2026-05-01");
+    expect(e.note).toMatch(/Officer-set/);
+  });
+});
+
+describe("UAPA extension step honours the explicit custody-ext date (V4-DELTA §2)", () => {
+  it("custodyExtFiledDate before day 90 marks the 43-D(2) window done; lead starts day 75", () => {
+    const c = mk({ uapaFlag: true, arrestDate: "2026-06-04", custodyStatus: "in_custody", custodyExtFiledDate: "2026-08-20" });
+    const e = find(run(c, "2026-08-25"), "uapa-pp-report-window")!;
+    expect(e.state).toBe("done");
+    expect(e.leadOffsets).toContain(15); // day-75 reminder on the day-90 boundary
+  });
+
+  it("anchor falls back to the earliest per-accused arrest when no case-level dates exist", () => {
+    const persons: PersonRecord[] = [
+      { id: "a1", caseId: "c1", role: "accused", name: "A-1", accusedStatus: "police_custody", arrestDate: "2026-06-04" },
+    ];
+    const e = find(run(mk({ uapaFlag: true }), "2026-06-10", persons), "uapa-pp-report-window")!;
+    expect(e.dueAt).toBe(addDays("2026-06-04", 90));
   });
 });
 
@@ -315,13 +412,17 @@ describe("routine trial 15-day lead (§4.2)", () => {
 
 /** Doc-sync: every rule's exact law reference pinned here; drift fails CI. */
 const EXPECTED_LAWREFS: Record<string, string> = {
-  "expert-report-2day": "Expert-report follow-up — pending >2 days from forwarding",
+  "expert-report-pending": "Expert-report follow-up — pending >7 days from forwarding (V4-DELTA Q1)",
   "process-request-overdue": "Process & Requests — expected-response follow-up (§6)",
   "efir-3day": "BNSS 173(1)(ii)",
   "production-24h": "BNSS 58 + 187(1); Art. 22(2)",
   "fr1-chargesheet": "Chargesheet/FR limit from arrest (BNSS 187(3) / UAPA 43-D(2))",
-  "fr-sp-remarks": "FR-II → SP (Branch Head) comments ≤ 1 week",
-  "fr-dg-order": "Hard flag: DG order ≤ 7 days of SP remarks",
+  "fr-sp-remarks": "SP remarks — UAPA 150-day line (V6 preview / V4-DELTA Q2)",
+  "fr-dg-order": "Hard flag: DG approval ≤ 7 days of FR-I submission (V4-DELTA Q2)",
+  "fr-ir-mha": "IR for MHA sanction ≤ 7 days of DG approval (V6 preview)",
+  "mha-sanction-pending": "MHA sanction — chargesheet blocked until obtained (V6 preview)",
+  "bail-date-accused": "Bail matter on accused row — V6 preview (heading 12)",
+  "appeal-window-accused": "Appeal window per convicted accused (V4-DELTA Q3/Q7)",
   "custody-production": "BNSS — custody / production",
   "pr-first": "First PR ≤ 15 days of registration",
   "pr-monthly": "Monthly PR from the 1st; critical by the 7th",

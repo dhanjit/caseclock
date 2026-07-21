@@ -50,7 +50,7 @@ describe("agenda projection", () => {
       ],
     });
     const agenda = buildAgenda([a], DEFAULT_SETTINGS, "2026-06-27");
-    expect(agenda.overdue.some((i) => i.deadline.ruleId === "expert-report-2day")).toBe(true);
+    expect(agenda.overdue.some((i) => i.deadline.ruleId === "expert-report-pending")).toBe(true);
     expect(agenda.overdue.some((i) => i.deadline.ruleId === "process-request-overdue")).toBe(true);
   });
 

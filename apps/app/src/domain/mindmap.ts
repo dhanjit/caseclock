@@ -32,6 +32,7 @@ const STATUS_HEX: Record<AccusedStatus, string> = {
   charge_sheeted: "#4ade80",
   under_investigation: "#facc15",
   acquitted: "#38bdf8",
+  convicted: "#fb7185",
   dropped: "#a8a29e",
 };
 

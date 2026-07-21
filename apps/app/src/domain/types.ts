@@ -143,7 +143,8 @@ export interface PlaceOfOccurrence {
   lng?: number | null;
 }
 
-/** The officer's 11 accused statuses (REQUIREMENTS §6), each with a distinct colour. */
+/** The officer's accused statuses (REQUIREMENTS §11 + V4-DELTA Q3: 12th value
+ * "convicted", from the V6/V7 previews), each with a distinct colour. */
 export type AccusedStatus =
   | "police_custody"
   | "judicial_custody"
@@ -155,7 +156,52 @@ export type AccusedStatus =
   | "charge_sheeted"
   | "under_investigation"
   | "acquitted"
+  | "convicted"
   | "dropped";
+
+/** Officer supervision categories (V4-DELTA Q8 / V6 preview) — a manual facet of
+ * how much attention a case gets, orthogonal to the procedural CaseStatus. */
+export type CaseCategory = "I" | "II" | "III" | "IV" | "V";
+
+export const CASE_CATEGORY_META: Record<CaseCategory, { short: string; label: string }> = {
+  I: { short: "Cat I · UI", label: "Cat I — Under active investigation" },
+  II: { short: "Cat II · AFI", label: "Cat II — Active further investigation" },
+  III: { short: "Cat III · PFI", label: "Cat III — Passive further investigation (long-term)" },
+  IV: { short: "Cat IV · Dormant", label: "Cat IV — Dormant" },
+  V: { short: "Cat V · Closed", label: "Cat V — Closed" },
+};
+
+export const CASE_CATEGORIES: CaseCategory[] = ["I", "II", "III", "IV", "V"];
+
+/** Chargesheet register (V4-DELTA N1 / V6 preview) — main + supplementaries, each
+ * covering a subset of the accused. The case-level `chargesheetFiledDate` is
+ * DERIVED from this register (earliest date) once any row exists. */
+export interface ChargesheetRecord {
+  id: string;
+  caseId: string;
+  kind: "main" | "supplementary";
+  date: ISODate;
+  court?: string; // court / CC no.
+  accusedIds: string[]; // PersonRecord ids covered by this chargesheet
+  note?: string;
+}
+
+/** Sanctions as an open list (V4-DELTA §3, replacing the two fixed fields) —
+ * e.g. "Statutory (UAPA s.45)", "DG sanction", cycled Pending → Required → Obtained. */
+export interface SanctionItem {
+  id: string;
+  kind: string;
+  state: "pending" | "required" | "obtained";
+  date?: ISODate | null; // set when obtained
+}
+
+/** App-level CIO master list (V7-6) — Case Investigating Officers, referenced by
+ * every case's H5.1 dropdown. Reference data: deletable, unlike case records. */
+export interface CioRecord {
+  id: string;
+  name: string;
+  rank?: string;
+}
 
 export interface CaseRecord {
   id: string;
@@ -168,6 +214,11 @@ export interface CaseRecord {
   identity?: string; // §3.2 Identity of the case (1 line)
   sectionsOfLaw?: string; // §3.3 Sections of law (display string; structured flags below)
   occurrenceDate?: ISODate | null; // §3.4 Date of occurrence (distinct from registration)
+  // V7 docket-of-record sub-headings (V4-DELTA §1.1)
+  originalFir?: string; // H1.1 — parent FIR for re-registered/transferred dockets
+  cioId?: string | null; // H5.1 — Case Investigating Officer (CioRecord id)
+  complainant?: string; // H5.2 — name & address of complainant
+  trialCourtName?: string; // H5.3 — name of the trial court
   brief?: string; // §3.6 Brief of the case
   investigationProgress?: string; // §3.8 Progress of investigation
   trialStatus?: string; // §3.10 Status of trial
@@ -196,10 +247,18 @@ export interface CaseRecord {
   custodyCaseType?: CustodyCaseType | null; // drives the statutory limit + buffer (default-derived)
   uapaCustodyDays?: number | null; // configurable UAPA target (default 150); statutory 90→180 shown alongside
   custodyEndDate?: ISODate | null; // user-fed custody end → production reminder 1 day prior
-  // FR review chain (hierarchy "indicative only"; only the DG-7-day flag is hard)
+  // FR review chain → MHA-sanction pipeline (V4-DELTA §2/§3, per the V6 preview):
+  // FR-I submitted (internal, up the chain — distinct from the court chargesheet)
+  // → DG approval (≤7d of FR-I, hard) → IR for MHA (≤7d of DG, hard) → MHA sanction.
+  frISubmittedDate?: ISODate | null;
   frIIFiledDate?: ISODate | null;
-  spRemarksDate?: ISODate | null;
+  spRemarksDate?: ISODate | null; // UAPA-only step (due on the 150-day line)
+  custodyExtFiledDate?: ISODate | null; // UAPA custody-extension 90→180 filed (day-75 reminder)
+  dgApprovedDate?: ISODate | null; // absorbs legacy dgOrderDate (hydration maps it)
+  /** @deprecated superseded by dgApprovedDate — kept so old vault JSON still parses. */
   dgOrderDate?: ISODate | null;
+  irForMhaDate?: ISODate | null;
+  mhaSanctionDate?: ISODate | null;
   // Progress Reports
   firstPrFiledDate?: ISODate | null; // first PR (≤15d of registration)
   prFiledMonths?: string[]; // YYYY-MM marked filed (monthly PR, due by the 7th)
@@ -229,14 +288,20 @@ export interface CaseRecord {
   deathSentence?: boolean;
   appealDecided?: boolean; // appeal filed or decided not to appeal
 
-  // Sanctions (§5) + place of occurrence (§5)
+  // Sanctions (§5) — open list per V4-DELTA §3; the two legacy fixed fields are
+  // migrated into `sanctions` on hydration and kept only for old vault JSON.
+  sanctions?: SanctionItem[];
+  /** @deprecated migrated into `sanctions` on hydration. */
   sanctionStatutory?: SanctionStatus;
+  /** @deprecated migrated into `sanctions` on hydration. */
   sanctionDg?: SanctionStatus;
   sanctionNote?: string;
   place?: PlaceOfOccurrence;
 
   // Supervision
   status: CaseStatus;
+  category?: CaseCategory; // officer-set Cat I–V facet (default "I")
+  demo?: boolean; // sample/demo case — the only kind that may be deleted (V7-9)
   lastTouchedAt?: ISODate | null;
   nextReviewDate?: ISODate | null;
   // Fluid user priority (REQUIREMENTS §1) — the officer flags up to ~10 cases that
@@ -251,13 +316,64 @@ export interface PersonRecord {
   caseId: string;
   role: "accused" | "witness" | "victim" | "informant" | "surety";
   name: string;
-  accusedStatus?: AccusedStatus; // §6 — the officer's 11-value status (for role=accused)
+  accusedStatus?: AccusedStatus; // §11 — the officer's 12-value status (for role=accused)
   firstTimeOffender?: boolean;
   otherPendingCases?: boolean; // s.479 / s.480 disqualifier
   custodyStatus?: "in_custody" | "released";
   securedSummonedStatus?: "secured" | "summoned" | "pending";
   loc?: LocNotice[]; // §5 — LOC / Interpol notices
   custodyHistory?: CustodyHistoryEntry[]; // §4.1 — previous custody
+  // Per-accused clocks (V4-DELTA N6/N7 + V7-8) — the FR anchor is the EARLIEST
+  // accused arrest; each in-custody accused carries its own custody-end reminder.
+  arrestDate?: ISODate | null; // starts FR & custody clocks for this accused
+  custodyEndDate?: ISODate | null; // current spell ends → produce/extend, 1-day-prior reminder
+  bailPending?: boolean; // live bail matter for this accused …
+  bailDate?: ISODate | null; // … heard on this date (drives the BAIL deadline)
+  othersNote?: string; // LOC / MLA / Interpol free text (heading 12 "Others")
+  // Conviction sub-record (Q3/Q7): forum-accurate default appeal window, editable.
+  sentence?: string;
+  sentenceDate?: ISODate | null;
+  appealBy?: ISODate | null;
+}
+
+/** Earliest per-accused arrest (fallback: case-level arrestDate) — the officer's
+ * FR-clock anchor (V4-DELTA §2). */
+export function earliestArrest(c: CaseRecord, persons: PersonRecord[]): ISODate | null {
+  const dates = persons
+    .filter((p) => p.role === "accused" && p.arrestDate)
+    .map((p) => p.arrestDate as ISODate)
+    .sort();
+  return dates[0] ?? c.arrestDate ?? null;
+}
+
+/** H7 status-count table (V7-7): the standard supervisor breakdown, computed. */
+export function accusedStatusCounts(persons: PersonRecord[]): { label: string; count: number }[] {
+  const accused = persons.filter((p) => p.role === "accused");
+  const n = (pred: (p: PersonRecord) => boolean) => accused.filter(pred).length;
+  const is = (...s: AccusedStatus[]) => (p: PersonRecord) => s.includes(p.accusedStatus as AccusedStatus);
+  return [
+    { label: "Total", count: accused.length },
+    { label: "Arrested (PC + JC)", count: n(is("police_custody", "judicial_custody")) },
+    { label: "Absconder", count: n(is("absconding")) },
+    { label: "Killed", count: n(is("killed")) },
+    { label: "Charge-sheeted", count: n(is("charge_sheeted")) },
+    { label: "Under investigation", count: n(is("under_investigation")) },
+    { label: "Convicted", count: n(is("convicted")) },
+    { label: "Acquitted", count: n(is("acquitted")) },
+    { label: "Approver", count: n(is("approver")) },
+    { label: "Dropped", count: n(is("dropped")) },
+  ];
+}
+
+/**
+ * Default appeal-by date for a convicted accused (V4-DELTA §5.2): forum-accurate
+ * window from the sentence date — 30d magistrate→Sessions, 60d sessions→HC (30d
+ * if death sentence) — falling back to 90d marked "verify" when the forum is unknown.
+ */
+export function defaultAppealWindowDays(c: CaseRecord): { days: number; verified: boolean } {
+  if (c.trialCourtLevel === "magistrate") return { days: 30, verified: true };
+  if (c.trialCourtLevel === "sessions") return { days: c.deathSentence ? 30 : 60, verified: true };
+  return { days: 90, verified: false };
 }
 
 export interface HearingRecord {
@@ -301,7 +417,8 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  untouchedDays: 14,
+  // V4-DELTA §2: the officer's dormancy threshold is 30 days (V6 STALE_DAYS).
+  untouchedDays: 30,
   holidays: [],
 };
 

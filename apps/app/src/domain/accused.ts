@@ -22,6 +22,7 @@ export const ACCUSED_STATUS_ORDER: AccusedStatus[] = [
   "charge_sheeted",
   "under_investigation",
   "acquitted",
+  "convicted",
   "dropped",
 ];
 
@@ -36,6 +37,7 @@ export const ACCUSED_STATUS_META: Record<AccusedStatus, AccusedStatusMeta> = {
   charge_sheeted: { label: "Charge-sheeted", badge: "bg-green-500/15 text-green-300 border-green-500/30", meaning: "Charge sheet filed against the accused." },
   under_investigation: { label: "Under investigation", badge: "bg-yellow-500/15 text-yellow-200 border-yellow-500/30", meaning: "Role still under investigation." },
   acquitted: { label: "Acquitted", badge: "bg-sky-500/15 text-sky-300 border-sky-500/30", meaning: "Court tried and found not guilty." },
+  convicted: { label: "Convicted", badge: "bg-rose-500/15 text-rose-300 border-rose-500/30", meaning: "Court tried and convicted — record sentence + appeal window (V4-DELTA Q3)." },
   dropped: { label: "Dropped", badge: "bg-stone-500/15 text-stone-300 border-stone-500/30", meaning: "Name removed / not sent for trial (e.g. insufficient evidence, FR closure)." },
 };
 

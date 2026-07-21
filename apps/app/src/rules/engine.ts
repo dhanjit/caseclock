@@ -28,6 +28,8 @@ import {
 } from "./dates";
 import {
   custodyLimits,
+  defaultAppealWindowDays,
+  earliestArrest,
   processRequestLabel,
   type CaseRecord,
   type DeadlineEvent,
@@ -132,15 +134,19 @@ export const RULE_REGISTRY: Rule[] = [
     severity: "statutory-critical",
     track: "investigation",
     leadOffsets: LEAD_CRITICAL,
-    applies: (c) => !!c.arrestDate,
-    compute: ({ c, today }) => {
+    applies: () => true, // anchor may live on the accused rows — resolved in compute
+    compute: ({ c, persons, today }) => {
+      // V4-DELTA §2: the FR anchor is the EARLIEST per-accused arrest (V6 frAnchor),
+      // falling back to the case-level arrestDate for older records.
+      const anchor = earliestArrest(c, persons);
+      if (!anchor) return null;
       const lim = custodyLimits(c);
       // Working alert = his buffered target from ARREST (§4.1). Statutory default-bail
       // date legally runs from FIRST REMAND (BNSS 187(3)), falling back to arrest.
-      const buffered = addDays(c.arrestDate!, lim.buffered);
-      const statutoryAnchor = c.firstRemandDate ?? c.arrestDate!;
+      const buffered = addDays(anchor, lim.buffered);
+      const statutoryAnchor = c.firstRemandDate ?? anchor;
       const statutory = addDays(statutoryAnchor, lim.statutory);
-      const anchorLabel = c.firstRemandDate ? "first remand" : "arrest";
+      const anchorLabel = c.firstRemandDate ? "first remand" : "earliest arrest";
       const filed = !!c.chargesheetFiledDate;
       const note = filed
         ? "Chargesheet / FR filed."
@@ -154,41 +160,87 @@ export const RULE_REGISTRY: Rule[] = [
       };
     },
   },
-  // FR review chain — hierarchy is "indicative only"; the single HARD flag is the
-  // DG order > 7 days after SP remarks.
+  // FR → MHA-sanction pipeline (V4-DELTA §2, per the officer's V6 preview):
+  // FR-I submitted → DG approval (≤7d of FR-I, HARD) → IR for MHA (≤7d of DG, HARD)
+  // → MHA sanction. SP remarks is a UAPA-only step riding the 150-day line.
   {
     id: "fr-sp-remarks",
-    lawRef: "FR-II → SP (Branch Head) comments ≤ 1 week",
+    lawRef: "SP remarks — UAPA 150-day line (V6 preview / V4-DELTA Q2)",
     verified: "confirmed",
     severity: "statutory",
     track: "investigation",
-    leadOffsets: [3, 1],
-    applies: (c) => !!c.frIIFiledDate,
-    compute: ({ c, today }) => {
-      const due = addDays(c.frIIFiledDate!, 7);
-      return { type: "SP remarks on FR-II (≤1 week)", dueAt: due, state: stateVs(due, today, !!c.spRemarksDate), owes: "self" };
+    leadOffsets: [15, 7, 3],
+    applies: (c) => c.uapaFlag && !!c.frISubmittedDate,
+    compute: ({ c, persons, today }) => {
+      const anchor = earliestArrest(c, persons);
+      if (!anchor) return null;
+      const due = addDays(anchor, custodyLimits(c).buffered);
+      return { type: "SP remarks on FR (within the 150-day line)", dueAt: due, state: stateVs(due, today, !!c.spRemarksDate), owes: "self" };
     },
   },
   {
     id: "fr-dg-order",
-    lawRef: "Hard flag: DG order ≤ 7 days of SP remarks",
+    lawRef: "Hard flag: DG approval ≤ 7 days of FR-I submission (V4-DELTA Q2)",
     verified: "confirmed",
     severity: "statutory-critical",
     track: "investigation",
     leadOffsets: [3, 1],
-    applies: (c) => !!c.spRemarksDate,
+    applies: (c) => !!c.frISubmittedDate,
     compute: ({ c, today }) => {
-      const due = addDays(c.spRemarksDate!, 7);
+      const due = addDays(c.frISubmittedDate!, 7);
       return {
-        type: "DG order on FR (≤7 days of SP remarks)",
+        type: "DG approval of FR-I (≤7 days)",
         dueAt: due,
-        state: stateVs(due, today, !!c.dgOrderDate),
+        state: stateVs(due, today, !!(c.dgApprovedDate || c.dgOrderDate)),
         owes: "self",
-        note: "Hard flag — escalate if the DG order is not passed within 7 days of SP remarks.",
+        note: "Hard flag — escalate if DG approval is not recorded within 7 days of FR-I submission.",
       };
     },
   },
-  // Custody production — user feeds the custody end date; remind 1 day prior.
+  {
+    id: "fr-ir-mha",
+    lawRef: "IR for MHA sanction ≤ 7 days of DG approval (V6 preview)",
+    verified: "confirmed",
+    severity: "statutory-critical",
+    track: "investigation",
+    leadOffsets: [3, 1],
+    applies: (c) => !!(c.dgApprovedDate || c.dgOrderDate),
+    compute: ({ c, today }) => {
+      // Chargesheet already on file without this step → the pipeline is moot (V6
+      // closes it on csFiled); a recorded IR still shows as a done row.
+      if (c.chargesheetFiledDate && !c.irForMhaDate) return null;
+      const dg = (c.dgApprovedDate ?? c.dgOrderDate)!;
+      const due = addDays(dg, 7);
+      return {
+        type: "IR for MHA sanction (≤7 days of DG approval)",
+        dueAt: due,
+        state: stateVs(due, today, !!c.irForMhaDate),
+        owes: "self",
+        note: "Hard flag — the Investigation Report for MHA sanction goes within a week of DG approval.",
+      };
+    },
+  },
+  {
+    id: "mha-sanction-pending",
+    lawRef: "MHA sanction — chargesheet blocked until obtained (V6 preview)",
+    verified: "confirmed",
+    severity: "statutory",
+    track: "investigation",
+    leadOffsets: [3, 1],
+    applies: (c) => !!c.irForMhaDate,
+    compute: ({ c, today }) => {
+      const due = addDays(c.irForMhaDate!, 7);
+      return {
+        type: "MHA sanction pending",
+        dueAt: due,
+        state: stateVs(due, today, !!c.mhaSanctionDate),
+        owes: "self",
+        note: "Chargesheet may be filed only after MHA sanction — follow up weekly.",
+      };
+    },
+  },
+  // Custody production — per-accused custody end dates (V4-DELTA §2); the legacy
+  // case-level date still fires for older records. Remind 1 day prior.
   {
     id: "custody-production",
     lawRef: "BNSS — custody / production",
@@ -196,14 +248,30 @@ export const RULE_REGISTRY: Rule[] = [
     severity: "statutory-critical",
     track: "investigation",
     leadOffsets: [1],
-    applies: (c) => !!c.custodyEndDate,
-    compute: ({ c, today }) => ({
-      type: "Custody ends — produce accused / seek extension",
-      dueAt: c.custodyEndDate!,
-      state: stateVs(c.custodyEndDate!, today, false),
-      owes: "IO",
-      note: "Reminder 1 day prior; record the previous custody as history.",
-    }),
+    applies: () => true,
+    compute: ({ c, persons, today }) => {
+      const rows: RuleResult[] = persons
+        .filter((p) => p.role === "accused" && p.custodyEndDate)
+        .map((p) => ({
+          type: `Custody ends — produce ${p.name} / seek extension`,
+          dueAt: p.custodyEndDate!,
+          occurrenceDate: p.custodyEndDate!,
+          instanceId: p.id,
+          state: stateVs(p.custodyEndDate!, today, false),
+          owes: "IO" as const,
+          note: "Reminder 1 day prior; record the previous custody as history.",
+        }));
+      if (c.custodyEndDate) {
+        rows.push({
+          type: "Custody ends — produce accused / seek extension",
+          dueAt: c.custodyEndDate,
+          state: stateVs(c.custodyEndDate, today, false),
+          owes: "IO",
+          note: "Reminder 1 day prior; record the previous custody as history.",
+        });
+      }
+      return rows.length ? rows : null;
+    },
   },
   // Progress Reports (PR)
   {
@@ -253,11 +321,17 @@ export const RULE_REGISTRY: Rule[] = [
     verified: "confirmed",
     severity: "statutory-critical",
     track: "investigation",
-    leadOffsets: [20, 15, 7, 3],
-    applies: (c) => c.uapaFlag && !!(c.firstRemandDate || c.arrestDate) && !c.chargesheetFiledDate,
-    compute: ({ c, today }) => {
-      const day90 = addDays((c.firstRemandDate ?? c.arrestDate)!, 90);
-      const r = c.uapaPpReportFiledDate;
+    // V4-DELTA §2: the reminder runs from day 75 (V6 CUSTEXT step) — lead 15 on the
+    // day-90 boundary = day 75.
+    leadOffsets: [15, 7, 3, 1],
+    applies: (c) => c.uapaFlag && !c.chargesheetFiledDate,
+    compute: ({ c, persons, today }) => {
+      const anchor = c.firstRemandDate ?? earliestArrest(c, persons);
+      if (!anchor) return null;
+      const day90 = addDays(anchor, 90);
+      // Either date evidences the extension step: the PP report or the officer's
+      // explicit "custody extension 90→180 filed" date (V4-DELTA custodyExtFiledDate).
+      const r = c.uapaPpReportFiledDate ?? c.custodyExtFiledDate;
       let state: DeadlineState;
       let note: string;
       if (r) {
@@ -278,25 +352,25 @@ export const RULE_REGISTRY: Rule[] = [
       return { type: "UAPA 43-D(2) PP extension report", dueAt: day90, state, owes: "PP", note };
     },
   },
-  // Expert-report 2-day follow-up (REQUIREMENTS §4.1 / §5 heading 9) — FSL, ballistic,
-  // device imaging etc. Fires RED once an expert report is pending beyond 2 days from
-  // its forwarding date, and clears the moment the report is marked received.
+  // Expert-report follow-up (V4-DELTA Q1 — the officer's V6 preview sets the chase
+  // window at 7 days from forwarding, superseding V3's 2 days). FSL, ballistic,
+  // device imaging etc. — clears the moment the report is marked received.
   {
-    id: "expert-report-2day",
-    lawRef: "Expert-report follow-up — pending >2 days from forwarding",
+    id: "expert-report-pending",
+    lawRef: "Expert-report follow-up — pending >7 days from forwarding (V4-DELTA Q1)",
     verified: "confirmed",
     severity: "statutory",
     track: "investigation",
-    leadOffsets: [1],
+    leadOffsets: [2, 1],
     applies: () => true,
     compute: ({ evidence, today }) =>
       evidence
         .filter((e) => e.reportKind === "expert" && !!e.forwardedDate)
         .map((e) => {
-          const due = addDays(e.forwardedDate!, 2);
+          const due = addDays(e.forwardedDate!, 7);
           const received = e.status === "received";
-          // Overdue from the forwarding date + 2 (inclusive): pending on day 2 already
-          // owes the FSL a reminder. Receipt switches it off regardless of the date.
+          // Overdue from forwarding + 7 (inclusive): pending on day 7 owes the lab a
+          // reminder. Receipt switches it off regardless of the date.
           const state: DeadlineState = received ? "done" : diffDays(today, due) >= 0 ? "overdue" : "active";
           return {
             type: `Expert report pending — ${e.reportToObtain || e.description}`,
@@ -305,7 +379,7 @@ export const RULE_REGISTRY: Rule[] = [
             instanceId: e.id,
             state,
             owes: "FSL" as const,
-            note: "Auto-alert: pending >2 days from forwarding; clears when the report is marked received.",
+            note: "Auto-alert: pending >7 days from forwarding; clears when the report is marked received.",
           };
         }),
   },
@@ -531,6 +605,63 @@ export const RULE_REGISTRY: Rule[] = [
     leadOffsets: [30, 7],
     applies: (c) => !!c.judgmentDate && c.outcome === "acquitted",
     compute: ({ c, today }) => appealResult(c, today, 90, "Appeal against acquittal (High Court)"),
+  },
+
+  // ---- Per-accused bail dates (V4-DELTA §2 / V6 accused table) ------------
+  // A live bail matter recorded directly on the accused row — no hearing record
+  // needed. Cleared by flipping bailPending off (or recording the outcome).
+  {
+    id: "bail-date-accused",
+    lawRef: "Bail matter on accused row — V6 preview (heading 12)",
+    verified: "confirmed",
+    severity: "court",
+    track: "court",
+    leadOffsets: [5, 3, 1],
+    applies: () => true,
+    compute: ({ persons, today }) =>
+      persons
+        .filter((p) => p.role === "accused" && p.bailPending && p.bailDate)
+        .map((p) => ({
+          type: `Bail hearing — ${p.name}`,
+          dueAt: p.bailDate!,
+          occurrenceDate: p.bailDate!,
+          instanceId: p.id,
+          state: stateVs(p.bailDate!, today, false),
+          owes: "self" as const,
+          note: "From the accused roster (bail pending). Oppose with case-diary extracts; clears when bail-pending is switched off.",
+        })),
+  },
+
+  // ---- Per-accused appeal window (V4-DELTA Q3/Q7) -------------------------
+  // A convicted accused carries sentence + appeal-by; the default window is
+  // forum-accurate (30 magistrate / 60 sessions / 30 death), 90d "verify" fallback.
+  {
+    id: "appeal-window-accused",
+    lawRef: "Appeal window per convicted accused (V4-DELTA Q3/Q7)",
+    verified: "confirmed",
+    severity: "statutory-condonable",
+    track: "trial",
+    leadOffsets: [30, 15, 7],
+    applies: () => true,
+    compute: ({ c, persons, today }) =>
+      persons
+        .filter((p) => p.role === "accused" && p.accusedStatus === "convicted" && (p.appealBy || p.sentenceDate))
+        .map((p) => {
+          const win = defaultAppealWindowDays(c);
+          const due = p.appealBy ?? addDays(p.sentenceDate!, win.days);
+          return {
+            type: `Appeal window — ${p.name}`,
+            dueAt: due,
+            occurrenceDate: due,
+            instanceId: p.id,
+            state: stateVs(due, today, !!c.appealDecided),
+            note: p.appealBy
+              ? "Officer-set appeal-by date."
+              : win.verified
+                ? `Default ${win.days}-day window from sentence (forum-accurate); edit appeal-by to override.`
+                : "Default 90-day window — trial forum unknown, VERIFY the limitation period.",
+          };
+        }),
   },
 
   // ---- Hearings (court / bail prep) --------------------------------------

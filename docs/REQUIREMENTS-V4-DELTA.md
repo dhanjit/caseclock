@@ -215,12 +215,14 @@ current-month-only PR check.
 > **Deferred to T3 (from the review):** one-tap NEXT-DATE rollover + per-case
 > integrity card; search result grouping/highlighting + in-case search; DORMANT
 > in the integrity card; `untouchedDays` settings UI.
-> **Open legal question for the officer (Q9):** day-90 counting convention —
-> `uapa-pp-report-window` treats a report filed ON day 90 as late (Wadhawan:
-> remand day counts) while fr1's statutory note shows anchor+90 as the file-by
-> date; the last SAFE day is arguably anchor+89. One-line display change once
-> confirmed. The 75-vs-150 SP-remarks line (statutory-correct 90→180 gating vs
-> the officer's flat 150) is recorded as intentional.
+> **Q9 RESOLVED (Dhanjit, 2026-07-21): Wadhawan convention adopted.** The
+> remand/arrest day counts in the statutory period (ED v. Kapil Wadhawan, 2023),
+> so every statutory display now shows the last SAFE day = anchor + N − 1,
+> labelled "counting the remand day — Wadhawan": fr1's note, the Investigation
+> panel row, the briefing default-bail line, and `uapa-pp-report-window`'s due
+> date (anchor+89) are all on one convention. The 75-vs-150 SP-remarks line
+> (statutory-correct 90→180 gating vs the officer's flat 150) remains recorded
+> as intentional.
 >
 > **T3 remains**: calendar view, H8/H13 dated logs + routing, dashboard heat
 > tiles, .doc export, full edit-only sweep, witness re-rank/examined,

@@ -58,9 +58,10 @@ function defaultBailLine(c: CaseRecord): string {
   }
   const buffered = addDays(c.arrestDate, lim.buffered);
   const statutoryAnchor = c.firstRemandDate ?? c.arrestDate;
-  const statutory = addDays(statutoryAnchor, lim.statutory);
+  // Q9 / Wadhawan: the remand day counts — print the last SAFE filing day.
+  const statutory = addDays(statutoryAnchor, lim.statutory - 1);
   const anchorLabel = c.firstRemandDate ? "first remand" : "arrest";
-  const note = `Default bail: buffered target ${fmtDate(buffered)} (${lim.buffered}d from arrest) · statutory ${fmtDate(statutory)} (${lim.statutory}d from ${anchorLabel}) — miss = default bail. Track: ${typeLabel}.`;
+  const note = `Default bail: buffered target ${fmtDate(buffered)} (${lim.buffered}d from arrest) · statutory last safe day ${fmtDate(statutory)} (${lim.statutory}d counting the ${anchorLabel} day — Wadhawan) — miss = default bail. Track: ${typeLabel}.`;
   return lim.statutoryNote ? `${note} ${lim.statutoryNote}` : note;
 }
 

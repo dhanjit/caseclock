@@ -144,7 +144,8 @@ describe("header block", () => {
     // UAPA, no extension → buffered 75 from arrest 04 Jun, statutory 90 from first remand 04 Jun.
     expect(h.defaultBailLine).toContain("Default bail:");
     expect(h.defaultBailLine).toContain("75d from arrest");
-    expect(h.defaultBailLine).toContain("90d from");
+    expect(h.defaultBailLine).toContain("90d counting"); // Wadhawan — last safe day printed
+    expect(h.defaultBailLine).toContain("Wadhawan");
     expect(h.defaultBailLine).toContain("UAPA");
   });
 

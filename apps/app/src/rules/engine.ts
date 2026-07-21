@@ -201,12 +201,14 @@ export const RULE_REGISTRY: Rule[] = [
       // A later-arrested uncovered accused's remand is not the case's first remand —
       // anchor their statutory line on their own arrest.
       const statutoryAnchor = chargesheets.length > 0 && uncovered.length > 0 ? anchor : (c.firstRemandDate ?? anchor);
-      const statutory = addDays(statutoryAnchor, lim.statutory);
+      // Q9 (officer-confirmed): the remand/arrest day COUNTS in the period
+      // (ED v. Kapil Wadhawan, 2023) — the last SAFE filing day is anchor + N − 1.
+      const statutory = addDays(statutoryAnchor, lim.statutory - 1);
       const anchorLabel = statutoryAnchor === c.firstRemandDate ? "first remand" : "earliest open arrest";
       const who = uncovered.length > 0 ? ` — ${uncovered.length} arrested accused not yet charge-sheeted (${uncovered.map((p) => p.name).join(", ")})` : "";
       const note = !open
         ? "Chargesheet / FR filed for every arrested accused."
-        : `Buffered target ${lim.buffered}d from arrest · statutory ${statutory} (${lim.statutory}d from ${anchorLabel}) — miss = default bail.${who}${lim.statutoryNote ? " " + lim.statutoryNote : ""}`;
+        : `Buffered target ${lim.buffered}d from arrest · statutory last safe day ${statutory} (${lim.statutory}d counting the ${anchorLabel} day — Wadhawan) — miss = default bail.${who}${lim.statutoryNote ? " " + lim.statutoryNote : ""}`;
       return {
         type: `Chargesheet / FR-I (${lim.buffered}d target)`,
         dueAt: buffered,
@@ -396,38 +398,40 @@ export const RULE_REGISTRY: Rule[] = [
       const openAnchor = frAnchor(c, persons, chargesheets);
       const anchor = chargesheets.length > 0 ? openAnchor : (c.firstRemandDate ?? openAnchor);
       if (!anchor) return null;
+      // Q9 / Wadhawan: the remand day counts — day 90 of the period falls on
+      // anchor + 89, the last safe day to act.
+      const lastSafe = addDays(anchor, 89);
       // Legacy vaults recorded the extension only as a boolean — honour it.
       if (c.uapaExtensionGranted && !c.uapaPpReportFiledDate && !c.custodyExtFiledDate) {
         return {
           type: "UAPA 43-D(2) PP extension report",
-          dueAt: addDays(anchor, 90),
+          dueAt: lastSafe,
           state: "done",
           owes: "PP",
           note: "Extension recorded as granted (legacy flag) — file the PP-report date when known.",
         };
       }
-      const day90 = addDays(anchor, 90);
       // Either date evidences the extension step: the PP report or the officer's
       // explicit "custody extension 90→180 filed" date (V4-DELTA custodyExtFiledDate).
       const r = c.uapaPpReportFiledDate ?? c.custodyExtFiledDate;
       let state: DeadlineState;
       let note: string;
       if (r) {
-        if (diffDays(r, day90) < 0) {
+        if (diffDays(r, lastSafe) <= 0) {
           state = "done";
-          note = "PP progress+reasons report filed before day 90.";
+          note = "PP progress+reasons report filed within the 90-day period.";
         } else {
           state = "overdue";
-          note = "PP report filed ON/AFTER day 90 — invalid; default-bail exposure.";
+          note = "PP report filed AFTER the last safe day (day 90, remand day counting — Wadhawan) — invalid; default-bail exposure.";
         }
-      } else if (diffDays(today, day90) >= 0) {
+      } else if (diffDays(today, lastSafe) > 0) {
         state = "overdue";
-        note = "Day 90 reached with no PP report — extension barred; default-bail exposure.";
+        note = "The 90-day period has expired with no PP report — extension barred; default-bail exposure.";
       } else {
         state = "active";
-        note = "PP (not IO) must file the progress+reasons report BEFORE day 90.";
+        note = "PP (not IO) must file the progress+reasons report within the 90-day period (last safe day shown — remand day counts, Wadhawan).";
       }
-      return { type: "UAPA 43-D(2) PP extension report", dueAt: day90, state, owes: "PP", note };
+      return { type: "UAPA 43-D(2) PP extension report", dueAt: lastSafe, state, owes: "PP", note };
     },
   },
   // Expert-report follow-up (V4-DELTA Q1 — the officer's V6 preview sets the chase

@@ -206,7 +206,8 @@ export function InvestigationPanel({
 
   const frBuffered = c.arrestDate ? addDays(c.arrestDate, lim.buffered) : null;
   const statutoryAnchor = c.firstRemandDate ?? c.arrestDate;
-  const frStatutory = statutoryAnchor ? addDays(statutoryAnchor, lim.statutory) : null;
+  // Q9 / Wadhawan: the remand day counts — show the last SAFE filing day.
+  const frStatutory = statutoryAnchor ? addDays(statutoryAnchor, lim.statutory - 1) : null;
   const recentMonths = (() => {
     let [y, m] = today.slice(0, 7).split("-").map(Number);
     const out: string[] = [];
@@ -231,7 +232,7 @@ export function InvestigationPanel({
         <Row k="Custody status" v={c.custodyStatus ? c.custodyStatus.replace("_", " ") : "—"} />
         <Row k="Chargesheet/FR-I" v={c.chargesheetFiledDate ? `filed ${fmtDate(c.chargesheetFiledDate)}` : "pending"} />
         <Row k={`FR-I target (${lim.buffered}d)`} v={frBuffered ? fmtDate(frBuffered) : "—"} />
-        <Row k={`Statutory (${lim.statutory}d)`} v={frStatutory ? fmtDate(frStatutory) : "—"} />
+        <Row k={`Statutory last safe day (${lim.statutory}d, Wadhawan)`} v={frStatutory ? fmtDate(frStatutory) : "—"} />
         <Row k="Custody ends" v={fmtDate(c.custodyEndDate)} />
         {isUapa && <Row k="UAPA PP-report" v={c.uapaPpReportFiledDate ? fmtDate(c.uapaPpReportFiledDate) : "pending (≤ day 90)"} />}
         {isUapa && <Row k="Custody ext. 90→180" v={c.custodyExtFiledDate ? `filed ${fmtDate(c.custodyExtFiledDate)}` : "not filed (day-75 reminder)"} />}

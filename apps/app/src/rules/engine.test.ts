@@ -80,7 +80,7 @@ describe("officer investigation engine (§4.1) — arrest-anchored custody/FR", 
     const c = mk({ punishmentBand: "10plus", arrestDate: "2025-05-01", firstRemandDate: "2025-05-03", custodyStatus: "in_custody" });
     const e = find(run(c, "2025-05-10"), "fr1-chargesheet")!;
     expect(e.dueAt).toBe(addDays("2025-05-01", 75)); // buffered target still from arrest (§4.1)
-    expect(e.note).toContain(addDays("2025-05-03", 90)); // statutory from first remand
+    expect(e.note).toContain(addDays("2025-05-03", 89)); // last safe day — remand day counts (Wadhawan)
     expect(e.note).toMatch(/first remand/);
   });
 
@@ -356,7 +356,7 @@ describe("UAPA extension step honours the explicit custody-ext date (V4-DELTA §
       { id: "a1", caseId: "c1", role: "accused", name: "A-1", accusedStatus: "police_custody", arrestDate: "2026-06-04" },
     ];
     const e = find(run(mk({ uapaFlag: true }), "2026-06-10", persons), "uapa-pp-report-window")!;
-    expect(e.dueAt).toBe(addDays("2026-06-04", 90));
+    expect(e.dueAt).toBe(addDays("2026-06-04", 89)); // Wadhawan last safe day
   });
 });
 
@@ -459,7 +459,7 @@ describe("chargesheet coverage — a partial CS must not hide a co-accused's exp
     const c = mk({ uapaFlag: true, chargesheetFiledDate: "2026-03-20", custodyStatus: "in_custody" });
     const pp = runCs(c, "2026-07-21", [CS(["a1"])]).find((d) => d.ruleId === "uapa-pp-report-window")!;
     expect(pp).toBeDefined();
-    expect(pp.dueAt).toBe(addDays("2026-05-01", 90));
+    expect(pp.dueAt).toBe(addDays("2026-05-01", 89)); // Wadhawan last safe day
   });
 
   it("covering every arrested accused (or an empty-accusedIds case-wide CS) closes the clock", () => {

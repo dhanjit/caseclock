@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useAppSettings } from "@/state/app-settings";
 import { Capacitor } from "@capacitor/core";
 import { useSession } from "@/state/session";
 import { useNav } from "@/state/nav";
@@ -8,7 +9,6 @@ import { useNotifySettings } from "@/state/notify-settings";
 import { exportBackup, prepareImport, applyImport, type BackupInfo } from "@/db/backup";
 import { loadSampleData } from "@/state/seed";
 import { buildAllCasesIcs } from "@/domain/ics";
-import { DEFAULT_SETTINGS } from "@/domain/types";
 import { todayISO } from "@/rules/dates";
 import { estimateStrength } from "@/lib/passphrase";
 import { fmtDate } from "@/lib/format";
@@ -192,6 +192,8 @@ export function SettingsView() {
           {impMsg && <p className="mt-2 text-xs text-ok">{impMsg}</p>}
         </Section>
 
+        <Appearance />
+
         <CalendarExport />
 
         {Capacitor.isNativePlatform() && <NotificationSettings />}
@@ -219,7 +221,7 @@ function CalendarExport() {
   function doExportIcs() {
     setBusy(true);
     try {
-      const ics = buildAllCasesIcs(aggregates, DEFAULT_SETTINGS, todayISO());
+      const ics = buildAllCasesIcs(aggregates, useAppSettings.getState().settings, todayISO());
       const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -243,6 +245,53 @@ function CalendarExport() {
       <button onClick={doExportIcs} disabled={busy || aggregates.length === 0} className={`${btn("primary")} disabled:opacity-40`}>
         {busy ? "Building…" : "Export deadlines (.ics)"}
       </button>
+    </Section>
+  );
+}
+
+function Appearance() {
+  const theme = useAppSettings((s) => s.theme);
+  const setTheme = useAppSettings((s) => s.setTheme);
+  const settings = useAppSettings((s) => s.settings);
+  const setUntouchedDays = useAppSettings((s) => s.setUntouchedDays);
+  return (
+    <Section title="Appearance & supervision">
+      <div className="flex flex-wrap items-center gap-6">
+        <label className="flex items-center gap-2 text-sm">
+          Theme
+          <span className="inline-flex overflow-hidden rounded-lg border border-line">
+            <button
+              onClick={() => void setTheme("light")}
+              className={`px-3 py-1.5 text-xs font-semibold ${theme === "light" ? "bg-ink text-surface" : "bg-surface-2 text-ink-dim"}`}
+              aria-pressed={theme === "light"}
+            >
+              ☀ Ledger
+            </button>
+            <button
+              onClick={() => void setTheme("dark")}
+              className={`px-3 py-1.5 text-xs font-semibold ${theme === "dark" ? "bg-ink text-surface" : "bg-surface-2 text-ink-dim"}`}
+              aria-pressed={theme === "dark"}
+            >
+              ☾ Dark
+            </button>
+          </span>
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          Dormant after
+          <input
+            type="number"
+            min={1}
+            className="w-20 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm"
+            value={settings.untouchedDays}
+            onChange={(e) => void setUntouchedDays(Number(e.target.value))}
+            aria-label="Days untouched before a case is flagged dormant"
+          />
+          days untouched
+        </label>
+      </div>
+      <p className="mt-2 text-xs text-ink-dim">
+        The dormancy threshold drives the DORMANT integrity check (officer default: 30 days).
+      </p>
     </Section>
   );
 }

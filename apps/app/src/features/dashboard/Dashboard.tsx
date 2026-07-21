@@ -2,7 +2,8 @@ import { useMemo } from "react";
 import { useCases } from "@/state/cases";
 import { useNav } from "@/state/nav";
 import { buildAgenda, casesNeedingAttention, quickStats, type AgendaItem } from "@/rules/agenda";
-import { CASE_CATEGORIES, CASE_CATEGORY_META, DEFAULT_SETTINGS } from "@/domain/types";
+import { CASE_CATEGORIES, CASE_CATEGORY_META } from "@/domain/types";
+import { useAppSettings } from "@/state/app-settings";
 import { integrityGaps, type IntegrityGap } from "@/domain/integrity";
 import { loadSampleData } from "@/state/seed";
 import { todayISO } from "@/rules/dates";
@@ -18,16 +19,56 @@ interface PrioritySummary {
   label: string;
   overdue: number;
   next: AgendaItem | null;
+  priority: boolean;
+  superior: boolean;
+  identity?: string;
+  firNumber: string;
+}
+
+/** V6 case-heat: worst state across the case's live deadlines → tile top border. */
+function heatOf(t: PrioritySummary): string {
+  if (t.overdue > 0) return "border-t-critical";
+  const days = t.next?.daysUntil;
+  if (days != null && days <= 15) return "border-t-statutory";
+  if (t.next) return "border-t-court";
+  return "border-t-line";
+}
+
+function HeatTile({ t, today, onOpen }: { t: PrioritySummary; today: string; onOpen: (id: string) => void }) {
+  return (
+    <button
+      onClick={() => onOpen(t.id)}
+      className={`rounded-lg border border-line border-t-4 bg-surface-2 p-2.5 text-left hover:bg-surface-3 ${heatOf(t)}`}
+    >
+      <p className="flex items-center gap-1.5">
+        <span className="min-w-0 flex-1 truncate font-mono text-[12px] font-bold">{t.firNumber.split("·")[0].trim()}</span>
+        {t.priority && <span className="shrink-0 text-[13px] text-statutory">★</span>}
+        {t.superior && <span className="shrink-0 text-[12px] text-critical" title="SC/HC matter live">⚖</span>}
+      </p>
+      <p className="mt-1 h-9 overflow-hidden text-[11.5px] leading-tight text-ink-dim">
+        <Highlighted text={t.identity ?? t.label} />
+      </p>
+      <p className="mt-1.5 flex items-center gap-1.5">
+        {t.overdue > 0 && (
+          <span className="rounded bg-red-bg px-1.5 py-0.5 font-mono text-[10px] font-bold text-critical">! {t.overdue}</span>
+        )}
+        <span className="ml-auto font-mono text-[10px] text-ink-dim">
+          {t.next?.deadline.dueAt ? relativeDays(t.next.deadline.dueAt, today) : "—"}
+        </span>
+      </p>
+    </button>
+  );
 }
 
 export function Dashboard() {
   const aggregates = useCases((s) => s.aggregates);
   const go = useNav((s) => s.go);
   const demoActive = useOnboarding((s) => s.demoActive);
+  const settings = useAppSettings((s) => s.settings);
   const today = todayISO();
 
-  const { agenda, attention, stats, superior, priorityCases, loudOverdue, silentOverdue, catCounts, gaps } = useMemo(() => {
-    const ag = buildAgenda(aggregates, DEFAULT_SETTINGS, today);
+  const { agenda, attention, stats, superior, priorityCases, monitoredCases, loudOverdue, silentOverdue, catCounts, gaps } = useMemo(() => {
+    const ag = buildAgenda(aggregates, settings, today);
     const allItems = [...ag.overdue, ...ag.today, ...ag.upcoming];
     const itemsByCase = new Map<string, AgendaItem[]>();
     for (const it of allItems) {
@@ -35,40 +76,45 @@ export function Dashboard() {
       arr.push(it);
       itemsByCase.set(it.caseId, arr);
     }
-    const priorityCases: PrioritySummary[] = aggregates
-      .filter((a) => a.case.priority && a.case.status !== "closed")
-      .map((a) => {
-        const items = (itemsByCase.get(a.case.id) ?? []).slice().sort((x, y) => (x.daysUntil ?? 9999) - (y.daysUntil ?? 9999));
-        return {
-          id: a.case.id,
-          label: caseLabel(a.case),
-          overdue: items.filter((i) => i.bucket === "overdue").length,
-          next: items.find((i) => i.bucket !== "overdue") ?? items[0] ?? null,
-        };
-      });
+    const tileOf = (a: (typeof aggregates)[number]): PrioritySummary => {
+      const items = (itemsByCase.get(a.case.id) ?? []).slice().sort((x, y) => (x.daysUntil ?? 9999) - (y.daysUntil ?? 9999));
+      return {
+        id: a.case.id,
+        label: caseLabel(a.case),
+        firNumber: a.case.firNumber,
+        identity: a.case.identity,
+        priority: !!a.case.priority,
+        superior: items.some((i) => i.deadline.track === "superior"),
+        overdue: items.filter((i) => i.bucket === "overdue").length,
+        next: items.find((i) => i.bucket !== "overdue") ?? items[0] ?? null,
+      };
+    };
+    const live = aggregates.filter((a) => a.case.status !== "closed");
+    const priorityCases: PrioritySummary[] = live.filter((a) => a.case.priority).map(tileOf);
+    const monitoredCases: PrioritySummary[] = live.filter((a) => !a.case.priority).map(tileOf);
     // Cat I–V strip (V4-DELTA Q8) + integrity checks (V6: "silence is not safety").
     const catCounts = CASE_CATEGORIES.map((k) => ({
       key: k,
       ...CASE_CATEGORY_META[k],
       count: aggregates.filter((a) => (a.case.category ?? "I") === k).length,
     }));
-    const live = aggregates.filter((a) => a.case.status !== "closed");
     const gaps: (IntegrityGap & { caseLabel: string })[] = live.flatMap((a) =>
       integrityGaps(a, today).map((g) => ({ ...g, caseLabel: caseLabel(a.case) })),
     );
     return {
       agenda: ag,
-      attention: casesNeedingAttention(aggregates, DEFAULT_SETTINGS, today),
+      attention: casesNeedingAttention(aggregates, settings, today),
       stats: quickStats(aggregates, today),
       superior: allItems.filter((i) => i.deadline.track === "superior"),
       priorityCases,
+      monitoredCases,
       // §1 — priority cases shout (RED); lighter cases are monitored silently.
       loudOverdue: ag.overdue.filter((i) => !i.silent),
       silentOverdue: ag.overdue.filter((i) => i.silent),
       catCounts,
       gaps,
     };
-  }, [aggregates, today]);
+  }, [aggregates, settings, today]);
 
   const open = (id: string) => go({ kind: "case", id });
 
@@ -111,7 +157,7 @@ export function Dashboard() {
           </div>
 
           {/* Integrity checks — "silence is not safety" (V4-DELTA §2 / V6) */}
-          {gaps.length > 0 && (
+          {(gaps.length > 0 || attention.some((f) => f.reasons.some((r) => /untouched/i.test(r)))) && (
             <div className="mt-3 rounded-xl border-l-4 border-critical bg-red-bg/50 p-3">
               <p className="eyebrow mb-2 !text-critical">⚠ Integrity checks — silence is not safety</p>
               <div className="space-y-1.5">
@@ -132,33 +178,45 @@ export function Dashboard() {
                   </button>
                 ))}
                 {gaps.length > 8 && <p className="text-[11px] text-ink-dim">+{gaps.length - 8} more — open the cases to resolve.</p>}
+                {/* DORMANT — untouched cases surface in the same card (V6). */}
+                {attention
+                  .filter((f) => f.reasons.some((r) => /untouched/i.test(r)))
+                  .map((f) => (
+                    <button
+                      key={`dormant:${f.caseId}`}
+                      onClick={() => open(f.caseId)}
+                      className="flex w-full items-start gap-2 text-left text-[13px] leading-snug hover:underline"
+                    >
+                      <span className="mt-0.5 shrink-0 rounded bg-soft px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wide text-white">
+                        Dormant
+                      </span>
+                      <span>
+                        <b className="font-mono text-[12px]">{f.caseLabel}</b> — {f.reasons.join(" · ")}. Verify.
+                      </span>
+                    </button>
+                  ))}
               </div>
             </div>
           )}
 
-          {/* Priority cases — pinned to the top with full detail (§1) */}
+          {/* Case-heat tile grid (V6): ★ priority pinned first, then Monitored.
+              Top border = worst live severity; ! n = overdue count; footer = next date. */}
           {priorityCases.length > 0 && (
-            <div className="mt-5 rounded-xl border-2 border-statutory/50 bg-statutory/5 p-2">
-              <div className="flex items-center gap-2.5 px-2 py-1 text-sm font-semibold text-statutory">
-                ★ PRIORITY CASES ({priorityCases.length})
+            <div className="mt-5 rounded-xl border-2 border-statutory/50 bg-statutory/5 p-2.5">
+              <p className="eyebrow mb-2 !text-statutory">★ Priority ({priorityCases.length}/10)</p>
+              <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                {priorityCases.map((t) => (
+                  <HeatTile key={`prio:${t.id}`} t={t} today={today} onOpen={open} />
+                ))}
               </div>
-              <div className="mt-1 grid gap-1 sm:grid-cols-2">
-                {priorityCases.map((p) => (
-                  <button
-                    key={`prio:${p.id}`}
-                    onClick={() => open(p.id)}
-                    className="flex items-center justify-between gap-3 rounded-xl bg-surface-3/50 px-3 py-2.5 text-left hover:bg-surface-3"
-                  >
-                    <span className="min-w-0 flex-1 truncate text-sm text-ink"><Highlighted text={p.label} /></span>
-                    {p.overdue > 0 && (
-                      <span className="shrink-0 rounded border border-critical/50 bg-critical/15 px-1.5 py-0.5 text-[10px] font-semibold text-critical">
-                        {p.overdue} overdue
-                      </span>
-                    )}
-                    <span className="shrink-0 text-xs text-ink-dim">
-                      {p.next?.deadline.dueAt ? relativeDays(p.next.deadline.dueAt, today) : "—"}
-                    </span>
-                  </button>
+            </div>
+          )}
+          {monitoredCases.length > 0 && (
+            <div className="mt-3">
+              <p className="eyebrow mb-2 !text-court">Monitored — one tile per case, tap to open</p>
+              <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                {monitoredCases.map((t) => (
+                  <HeatTile key={`mon:${t.id}`} t={t} today={today} onOpen={open} />
                 ))}
               </div>
             </div>

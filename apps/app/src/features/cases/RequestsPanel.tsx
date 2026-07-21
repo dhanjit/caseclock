@@ -44,6 +44,7 @@ export function RequestsPanel({
   const accused = agg.persons.filter((p) => p.role === "accused");
   const today = todayISO();
   const [type, setType] = useState<ProcessRequestType>("LOC");
+  const [removeArm, setRemoveArm] = useState<string | null>(null);
   const [refNo, setRefNo] = useState("");
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -106,7 +107,15 @@ export function RequestsPanel({
                 <button onClick={() => setExpanded(expanded === r.id ? null : r.id)} className="text-xs text-court">
                   {expanded === r.id ? "▾" : "▸"}
                 </button>
-                <button onClick={() => remove(r.id)} className="text-xs text-soft hover:text-critical">✕</button>
+                {removeArm === r.id ? (
+                  <span className="flex shrink-0 items-center gap-1">
+                    <span className="text-[10px] font-semibold text-critical">Delete?</span>
+                    <button onClick={() => { void remove(r.id); setRemoveArm(null); }} className="rounded bg-critical px-2 py-1 text-[11px] font-semibold text-white">Delete</button>
+                    <button onClick={() => setRemoveArm(null)} className="rounded border border-line px-2 py-1 text-[11px]">Keep</button>
+                  </span>
+                ) : (
+                  <button onClick={() => setRemoveArm(r.id)} className="px-1.5 py-1 text-xs text-soft hover:text-critical" title="Remove request (prefer marking rejected/executed — the record is preserved)" aria-label="Remove request">✕</button>
+                )}
               </div>
               {r.expectedResponseDate && (
                 <p className="mt-1 text-[11px] text-ink-dim">

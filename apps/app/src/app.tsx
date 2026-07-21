@@ -15,11 +15,13 @@ import { SearchView } from "@/features/search/SearchView";
 import { ReviewView } from "@/features/review/ReviewView";
 import { CioView } from "@/features/cio/CioView";
 import { LinksView } from "@/features/links/LinksView";
+import { CalendarView } from "@/features/calendar/CalendarView";
 import { SettingsView } from "@/features/settings/SettingsView";
 import { useSession } from "@/state/session";
 import { useNav } from "@/state/nav";
 import { useCases } from "@/state/cases";
 import { useCio } from "@/state/cio";
+import { useAppSettings } from "@/state/app-settings";
 import { useWatchlist } from "@/state/watchlist";
 import { useNotifySettings } from "@/state/notify-settings";
 import { useOnboarding } from "@/state/onboarding";
@@ -47,6 +49,8 @@ function Shell() {
       return <CioView />;
     case "links":
       return <LinksView />;
+    case "calendar":
+      return <CalendarView />;
     case "settings":
       return <SettingsView />;
     default:
@@ -71,6 +75,7 @@ export default function App() {
         await useCases.getState().load();
         await useWatchlist.getState().load();
         await useCio.getState().load();
+        await useAppSettings.getState().load();
         void useNotifySettings.getState().load();
         // First run: seed the demo cases + show the banner (once, until cleared).
         await useOnboarding.getState().maybeStartDemo();

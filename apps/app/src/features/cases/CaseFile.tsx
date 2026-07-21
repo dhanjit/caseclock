@@ -25,6 +25,8 @@ import { Section, Field } from "@/features/components/bits";
 import { Highlighted } from "@/features/components/Highlighted";
 import { btn } from "@/features/components/TopBar";
 import { useCio } from "@/state/cio";
+import { ProgressLogPanel, PlanLogPanel } from "./LogPanels";
+import type { HearingRecord, PlanEntry, ProgressEntry } from "@/domain/types";
 import { expertReportOverdue } from "./EvidencePanel";
 
 const input = "w-full rounded-xl border border-line bg-surface-2 px-3 py-2 text-sm text-ink outline-none focus:border-court";
@@ -202,14 +204,22 @@ function text(v: string | null | undefined) {
   return v ? <span className="whitespace-pre-wrap"><Highlighted text={v} /></span> : dash;
 }
 
+type ArrUpd<T> = (v: T[] | ((prev: T[]) => T[])) => Promise<void>;
+
 export function CaseFile({
   agg,
   onSaveCase,
   onSaveChargesheets,
+  onSaveProgress,
+  onSavePlan,
+  onSaveHearings,
 }: {
   agg: CaseAggregate;
   onSaveCase: (patch: Partial<CaseRecord>) => Promise<void>;
-  onSaveChargesheets?: (rows: ChargesheetRecord[] | ((prev: ChargesheetRecord[]) => ChargesheetRecord[])) => Promise<void>;
+  onSaveChargesheets?: ArrUpd<ChargesheetRecord>;
+  onSaveProgress?: ArrUpd<ProgressEntry>;
+  onSavePlan?: ArrUpd<PlanEntry>;
+  onSaveHearings?: ArrUpd<HearingRecord>;
 }) {
   const c = agg.case;
   const accused = agg.persons.filter((p) => p.role === "accused");
@@ -223,9 +233,7 @@ export function CaseFile({
   const [sections, setSections] = useState(c.sectionsOfLaw ?? "");
   const [occurrence, setOccurrence] = useState(c.occurrenceDate ?? "");
   const [brief, setBrief] = useState(c.brief ?? "");
-  const [progress, setProgress] = useState(c.investigationProgress ?? "");
   const [trialStatus, setTrialStatus] = useState(c.trialStatus ?? "");
-  const [plan, setPlan] = useState(c.planOfAction ?? "");
   // V7 docket-of-record fields (H1.1 / H5.1–5.3) + Cat I–V
   const [originalFir, setOriginalFir] = useState(c.originalFir ?? "");
   const [cioId, setCioId] = useState(c.cioId ?? "");
@@ -238,9 +246,7 @@ export function CaseFile({
     setSections(c.sectionsOfLaw ?? "");
     setOccurrence(c.occurrenceDate ?? "");
     setBrief(c.brief ?? "");
-    setProgress(c.investigationProgress ?? "");
     setTrialStatus(c.trialStatus ?? "");
-    setPlan(c.planOfAction ?? "");
     setOriginalFir(c.originalFir ?? "");
     setCioId(c.cioId ?? "");
     setComplainant(c.complainant ?? "");
@@ -256,9 +262,7 @@ export function CaseFile({
         sectionsOfLaw: sections.trim() || undefined,
         occurrenceDate: occurrence || null,
         brief: brief.trim() || undefined,
-        investigationProgress: progress.trim() || undefined,
         trialStatus: trialStatus.trim() || undefined,
-        planOfAction: plan.trim() || undefined,
         originalFir: originalFir.trim() || undefined,
         cioId: cioId || null,
         complainant: complainant.trim() || undefined,
@@ -318,15 +322,10 @@ export function CaseFile({
           <Field label="6. Brief of the case">
             <textarea className={`${input} min-h-[72px] resize-y`} value={brief} onChange={(e) => setBrief(e.target.value)} />
           </Field>
-          <Field label="8. Progress of investigation">
-            <textarea className={`${input} min-h-[72px] resize-y`} value={progress} onChange={(e) => setProgress(e.target.value)} />
-          </Field>
           <Field label="10. Status of trial">
             <textarea className={`${input} min-h-[56px] resize-y`} value={trialStatus} onChange={(e) => setTrialStatus(e.target.value)} />
           </Field>
-          <Field label="13. Plan of action">
-            <textarea className={`${input} min-h-[72px] resize-y`} value={plan} onChange={(e) => setPlan(e.target.value)} />
-          </Field>
+          <p className="text-xs text-ink-dim">Headings 8 and 13 are dated logs now — add entries directly on the case file.</p>
           <div className="flex justify-end gap-2">
             <button onClick={() => setEditing(false)} className={btn("ghost")}>Cancel</button>
             <button onClick={save} disabled={busy} className={`${btn("primary")} disabled:opacity-40`}>
@@ -381,7 +380,13 @@ export function CaseFile({
         <Heading n={7} title="Number of accused (computed from heading 12)">
           <AccusedCountTable agg={agg} />
         </Heading>
-        <Heading n={8} title="Progress of investigation">{text(c.investigationProgress)}</Heading>
+        <Heading n={8} title="Progress of investigation — dated log">
+          {onSaveProgress ? (
+            <ProgressLogPanel agg={agg} onSaveProgress={onSaveProgress} onSaveCase={onSaveCase} onSaveHearings={onSaveHearings} />
+          ) : (
+            text(c.investigationProgress)
+          )}
+        </Heading>
         <Heading n={9} title="Evidences collected">
           {(() => {
             const ev = agg.evidence ?? [];
@@ -435,7 +440,9 @@ export function CaseFile({
             </ul>
           )}
         </Heading>
-        <Heading n={13} title="Plan of action">{text(c.planOfAction)}</Heading>
+        <Heading n={13} title="Plan of action — dated log">
+          {onSavePlan ? <PlanLogPanel agg={agg} onSavePlan={onSavePlan} /> : text(c.planOfAction)}
+        </Heading>
       </div>
       <div className="mt-3 flex justify-end">
         <button onClick={startEdit} className={btn("ghost")}>Edit case file</button>

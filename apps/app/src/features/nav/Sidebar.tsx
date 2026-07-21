@@ -15,6 +15,7 @@ const NAV: { view: View; icon: string; label: string }[] = [
   { view: { kind: "review" }, icon: "🗂", label: "Review" },
   { view: { kind: "search" }, icon: "🔍", label: "Search" },
   { view: { kind: "links" }, icon: "🔗", label: "Links" },
+  { view: { kind: "calendar" }, icon: "📅", label: "Calendar" },
   { view: { kind: "cio" }, icon: "👮", label: "CIO" },
   { view: { kind: "settings" }, icon: "⚙", label: "Settings" },
 ];

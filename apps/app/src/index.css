@@ -38,6 +38,35 @@
   color-scheme: light;
 }
 
+/* Dark ledger (T3 / design-direction §3): same grammar, ink becomes the surface,
+   paper the text; severity hues re-tuned for dark. Applied via html[data-theme]. */
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --color-ink: #e9e2d0;
+  --color-ink-dim: #a89f8c;
+  --color-surface: #101b2d;
+  --color-surface-2: #17253c;
+  --color-surface-3: #1f3049;
+  --color-line: #33425e;
+
+  --color-critical: #ef6a6a;
+  --color-statutory: #d9a94e;
+  --color-court: #7fb3e0;
+  --color-soft: #97a0b3;
+  --color-ok: #7fc796;
+
+  --color-chrome: #0c1524;
+  --color-chrome-2: #17253c;
+  --color-chrome-line: #2b3a55;
+  --color-chrome-ink: #e9e2d0;
+  --color-chrome-dim: #b9a06f;
+  --color-brass: #b9903a;
+  --color-brass-bg: #3f351d;
+  --color-red-bg: #46242a;
+  --color-blue-bg: #223851;
+  --color-green-bg: #23402e;
+}
+
 html,
 body,
 #root {

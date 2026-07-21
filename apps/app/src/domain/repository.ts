@@ -15,7 +15,9 @@ import type {
   EvidenceRecord,
   HearingRecord,
   PersonRecord,
+  PlanEntry,
   ProcessRequestRecord,
+  ProgressEntry,
   SupervisionEntryRecord,
   TaskRecord,
   TowerDumpRecord,
@@ -33,6 +35,8 @@ export interface CaseAggregate {
   commsRequests?: CommsRequestRecord[]; // V4-DELTA N3 — CDR/IPDR/IMEI registers
   towerDumps?: TowerDumpRecord[]; // V4-DELTA N3 — tower-dump register
   custodyMovements?: CustodyMovementRecord[]; // V4-DELTA N2 — chain-of-custody ledger
+  progressLog?: ProgressEntry[]; // T3 — heading-8 dated+tagged log
+  planLog?: PlanEntry[]; // T3 — heading-13 dated action points
 }
 
 /** True once any chargesheet is on the register (V6 `csFiled`) — falls back to the
@@ -101,7 +105,22 @@ export function hydrateAggregate(agg: CaseAggregate): CaseAggregate {
     c.chargesheetFiledDate = [...chargesheets].map((cs) => cs.date).sort()[0];
   }
 
-  return { ...agg, case: c, persons, chargesheets };
+  // T3: heading-8/13 free-text fields seed the dated logs (deterministic ids —
+  // idempotent; the free-text fields are no longer editable, so no resurrect risk).
+  let progressLog = agg.progressLog;
+  if (!progressLog) {
+    progressLog = c.investigationProgress?.trim()
+      ? [{ id: `${c.id}-h8-legacy`, date: c.lastTouchedAt ?? c.firDate, tag: "General" as const, note: c.investigationProgress.trim() }]
+      : [];
+  }
+  let planLog = agg.planLog;
+  if (!planLog) {
+    planLog = c.planOfAction?.trim()
+      ? [{ id: `${c.id}-h13-legacy`, date: c.lastTouchedAt ?? c.firDate, note: c.planOfAction.trim() }]
+      : [];
+  }
+
+  return { ...agg, case: c, persons, chargesheets, progressLog, planLog };
 }
 
 export class CaseRepository {

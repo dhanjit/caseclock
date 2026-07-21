@@ -9,6 +9,7 @@ export type View =
   | { kind: "review" }
   | { kind: "cio" }
   | { kind: "links" }
+  | { kind: "calendar" }
   | { kind: "settings" };
 
 interface NavState {

@@ -267,6 +267,36 @@ export interface EvidenceObservation {
   text: string;
 }
 
+/** Heading-8 progress log (T3 / V6): dated + tagged entries, edit-only. A
+ * Court-tagged entry auto-creates a court-matter row; an entry can optionally
+ * route a dated append onto Sections (H3) / Brief (H6) / Trial status (H10). */
+export const PROGRESS_TAGS = [
+  "General",
+  "Sections",
+  "Arrest",
+  "Evidence",
+  "Court",
+  "FSL",
+  "Custody",
+  "Sanction",
+  "Intel",
+] as const;
+export type ProgressTag = (typeof PROGRESS_TAGS)[number];
+
+export interface ProgressEntry {
+  id: string;
+  date: ISODate;
+  tag: ProgressTag;
+  note: string;
+}
+
+/** Heading-13 plan-of-action log (T3 / V6): dated action points, edit-only. */
+export interface PlanEntry {
+  id: string;
+  date: ISODate;
+  note: string;
+}
+
 export interface CaseRecord {
   id: string;
   firNumber: string; // §3.1 Case number
@@ -392,6 +422,9 @@ export interface PersonRecord {
   securedSummonedStatus?: "secured" | "summoned" | "pending";
   loc?: LocNotice[]; // §5 — LOC / Interpol notices
   custodyHistory?: CustodyHistoryEntry[]; // §4.1 — previous custody
+  // T3 / V6 PW table (role === "witness"): what this witness proves + examination state.
+  relevance?: string;
+  examined?: boolean;
   // Per-accused clocks (V4-DELTA N6/N7 + V7-8) — the FR anchor is the EARLIEST
   // accused arrest; each in-custody accused carries its own custody-end reminder.
   arrestDate?: ISODate | null; // starts FR & custody clocks for this accused

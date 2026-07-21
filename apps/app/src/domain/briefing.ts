@@ -126,6 +126,20 @@ function textLines(v: string | null | undefined): string[] {
   return v && v.trim() ? [v] : [DASH];
 }
 
+/** Heading 8/13 (T3): dated log entries, newest first; legacy free-text fallback. */
+function progressLines(agg: CaseAggregate): string[] {
+  const log = agg.progressLog ?? [];
+  if (log.length === 0) return textLines(agg.case.investigationProgress);
+  return [...log]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .map((e) => `[${fmtDate(e.date)}${e.tag !== "General" ? ` · ${e.tag}` : ""}] ${e.note}`);
+}
+function planLines(agg: CaseAggregate): string[] {
+  const log = agg.planLog ?? [];
+  if (log.length === 0) return textLines(agg.case.planOfAction);
+  return [...log].sort((a, b) => b.date.localeCompare(a.date)).map((e) => `[${fmtDate(e.date)}] ${e.note}`);
+}
+
 export function buildBriefing(agg: CaseAggregate, today: ISODate, officers: CioRecord[] = [], watchlist: string[] = []): BriefingNote {
   const c = agg.case;
   const accused = agg.persons.filter((p) => p.role === "accused");
@@ -179,7 +193,7 @@ export function buildBriefing(agg: CaseAggregate, today: ISODate, officers: CioR
       title: "Number of accused",
       lines: accusedStatusCounts(agg.persons).map((r) => `${r.label}: ${r.count}`),
     },
-    { n: 8, title: "Progress of investigation", lines: textLines(c.investigationProgress) },
+    { n: 8, title: "Progress of investigation", lines: progressLines(agg) },
     { n: 9, title: "Evidences collected", lines: evidenceLines(agg, today) },
     { n: 10, title: "Status of trial", lines: textLines(c.trialStatus) },
     { n: 11, title: "Court matters", lines: courtMatterLines(agg) },
@@ -188,7 +202,7 @@ export function buildBriefing(agg: CaseAggregate, today: ISODate, officers: CioR
       title: "List of accused with status (incl. LOC / Interpol + custody history)",
       lines: accusedLines(agg),
     },
-    { n: 13, title: "Plan of action", lines: textLines(c.planOfAction) },
+    { n: 13, title: "Plan of action", lines: planLines(agg) },
     ...(csLines.length ? [{ n: "CS", title: "Chargesheet register", lines: csLines }] : []),
     ...(commsLines.length || towerLines.length
       ? [{ n: "CD", title: "Communication data (requests)", lines: [...commsLines, ...towerLines] }]

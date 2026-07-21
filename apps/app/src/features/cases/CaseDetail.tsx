@@ -14,10 +14,15 @@ import {
   type EvidenceRecord,
   type HearingRecord,
   type PersonRecord,
+  type PlanEntry,
   type ProcessRequestRecord,
+  type ProgressEntry,
   type SupervisionEntryRecord,
   type TowerDumpRecord,
 } from "@/domain/types";
+import { buildBriefing } from "@/domain/briefing";
+import { useCio } from "@/state/cio";
+import { useWatchlist } from "@/state/watchlist";
 import { newId } from "@/lib/id";
 import { fmtDate, relativeDays, severityTone, toneText } from "@/lib/format";
 import { Section, Field, Dot } from "@/features/components/bits";
@@ -25,6 +30,7 @@ import { Highlighted } from "@/features/components/Highlighted";
 import { TopBar, btn } from "@/features/components/TopBar";
 import { CaseFile } from "./CaseFile";
 import { AccusedPanel } from "./AccusedPanel";
+import { WitnessPanel } from "./WitnessPanel";
 import { InvestigationPanel } from "./InvestigationPanel";
 import { PipelinePanel } from "./PipelinePanel";
 import { CommsPanel } from "./CommsPanel";
@@ -178,6 +184,12 @@ export function CaseDetail({ id }: { id: string }) {
   async function saveMovements(custodyMovements: ArrOrFn<CustodyMovementRecord>) {
     await patch(id, (a) => ({ ...a, custodyMovements: resolveArr(custodyMovements, a.custodyMovements ?? []), case: { ...a.case, lastTouchedAt: today } }));
   }
+  async function saveProgress(progressLog: ArrOrFn<ProgressEntry>) {
+    await patch(id, (a) => ({ ...a, progressLog: resolveArr(progressLog, a.progressLog ?? []), case: { ...a.case, lastTouchedAt: today } }));
+  }
+  async function savePlan(planLog: ArrOrFn<PlanEntry>) {
+    await patch(id, (a) => ({ ...a, planLog: resolveArr(planLog, a.planLog ?? []), case: { ...a.case, lastTouchedAt: today } }));
+  }
   async function togglePriority() {
     if (!agg) return;
     const { blocked } = await setPriority(id, !agg.case.priority);
@@ -189,6 +201,25 @@ export function CaseDetail({ id }: { id: string }) {
     const ics = buildCaseIcs(agg, DEFAULT_SETTINGS, today);
     const safe = c.firNumber.replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "case";
     downloadFile(`caseclock-${safe}.ics`, ics, "text/calendar;charset=utf-8");
+  }
+  // T3 / V6: Word-openable .doc of the briefing note (the officer drafts in Word).
+  function exportDoc() {
+    if (!agg) return;
+    const note = buildBriefing(agg, today, useCio.getState().officers, useWatchlist.getState().names);
+    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const body = [
+      `<h1 style="font-size:16pt;margin:0 0 2pt;">CASE BRIEFING NOTE</h1>`,
+      `<p style="font-weight:bold;margin:0 0 2pt;">${esc(note.header.caseLabel)}</p>`,
+      `<p style="font-size:9pt;color:#444;margin:0 0 10pt;">Generated ${fmtDate(today)} · CONFIDENTIAL${note.header.uapa ? " · UAPA" : ""}<br/>${esc(note.header.defaultBailLine)}</p>`,
+      ...note.headings.map(
+        (h) =>
+          `<h2 style="font-size:11pt;border-bottom:0.5pt solid #999;margin:9pt 0 3pt;">${h.n}. ${esc(h.title)}</h2>` +
+          h.lines.map((l) => `<p style="margin:0 0 2pt;white-space:pre-wrap;">${esc(l)}</p>`).join(""),
+      ),
+    ].join("");
+    const html = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'><head><meta charset='utf-8'><title>${esc(c.firNumber)}</title></head><body style="font-family:Calibri,serif;font-size:11pt;">${body}</body></html>`;
+    const safe = c.firNumber.replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "case";
+    downloadFile(`caseclock-${safe}-briefing.doc`, html, "application/msword");
   }
 
   return (
@@ -211,6 +242,9 @@ export function CaseDetail({ id }: { id: string }) {
             </button>
             <button onClick={exportCaseIcs} title="Export this case's deadlines as .ics" className={btn("ghost")}>
               Export .ics
+            </button>
+            <button onClick={exportDoc} title="Download the briefing note as a Word-openable .doc" className={btn("ghost")}>
+              ⇩ .doc
             </button>
             <button onClick={() => go({ kind: "mindmap", id })} title="Per-case mind map" className={btn("ghost")}>
               Mind map
@@ -297,8 +331,16 @@ export function CaseDetail({ id }: { id: string }) {
       </Section>
 
       {/* The officer's 13-heading case file + the 11-status accused list */}
-      <CaseFile agg={agg} onSaveCase={saveCase} onSaveChargesheets={saveChargesheets} />
+      <CaseFile
+        agg={agg}
+        onSaveCase={saveCase}
+        onSaveChargesheets={saveChargesheets}
+        onSaveProgress={saveProgress}
+        onSavePlan={savePlan}
+        onSaveHearings={saveHearings}
+      />
       <AccusedPanel agg={agg} onSavePersons={savePersons} />
+      <WitnessPanel agg={agg} onSavePersons={savePersons} />
 
       {/* The two engines: investigation (FR/PR/custody) + court-trial (timeline + hearings) */}
       <InvestigationPanel agg={agg} onSaveCase={saveCase} />

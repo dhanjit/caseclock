@@ -178,6 +178,16 @@ const case1: CaseAggregate = {
   ],
   processRequests: c1Requests,
   chargesheets: c1Chargesheets,
+  // H8/H13 dated logs (T3) — from the officer's V6 seed.
+  progressLog: [
+    { id: "c1-h8-1", date: "2026-06-20", tag: "Court", note: "SC registry listed SLP of A-2 for 09 Jul. PP to prepare counter-affidavit; obtain custody chart from Malkhana." },
+    { id: "c1-h8-2", date: "2024-09-04", tag: "General", note: "Chargesheet filed against 4 accused before NIA Special Court. Supplementary probe continues qua A-5." },
+  ],
+  planLog: [
+    { id: "c1-h13-1", date: "2026-06-22", note: "File counter-affidavit in SLP (bail) before SC — coordinate with ALA/LA." },
+    { id: "c1-h13-2", date: "2026-06-22", note: "Pursue overdue device-imaging report — reminder to CFSL." },
+    { id: "c1-h13-3", date: "2026-06-10", note: "Execute LOC/RCN follow-up for A-4; move proclamation continuation." },
+  ],
   // Comms registers (V4-DELTA N3) — 70029-44810 + IMEI 356938035643809 recur in
   // Case 2: the Links map draws both as cross-case leads.
   commsRequests: [
@@ -326,6 +336,15 @@ const case2: CaseAggregate = {
   towerDumps: [
     { id: "c2-tw1", caseId: C2, ref: "L-0790/26 · 10 Jun 2026", site: "Paltan Bazar BTS", timeWindow: "02-Jun 12:00–14:00", status: "pending", expectedDate: "2026-06-28" },
   ] satisfies TowerDumpRecord[],
+  progressLog: [
+    { id: "c2-h8-1", date: "2026-06-25", tag: "Intel", note: "Source indicates a 4th handler crossed over; alerting BSF. A-1 custody ends 27th — plan JC remand." },
+    { id: "c2-h8-2", date: "2026-06-15", tag: "FSL", note: "Passports sent to QD lab. NOTE: tamper seal broken at handover — recorded & flagged; rectify chain." },
+  ],
+  planLog: [
+    { id: "c2-h13-1", date: "2026-06-25", note: "Ensure timely production of A-1 on 27 Jun (custody ends) — reminder fires 26 Jun." },
+    { id: "c2-h13-2", date: "2026-06-24", note: "Oppose A-2 bail on 02 Jul; file case-diary extract." },
+    { id: "c2-h13-3", date: "2026-06-20", note: "Finalise & dispatch MLA request; track via Process & Requests." },
+  ],
   // E-2 went to the QD lab with a broken tamper seal (the progress-log incident) —
   // flagged RED in the ledger and never un-rung; both legs still open (OUT).
   custodyMovements: [

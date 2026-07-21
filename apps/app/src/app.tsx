@@ -15,6 +15,7 @@ import { SearchView } from "@/features/search/SearchView";
 import { ReviewView } from "@/features/review/ReviewView";
 import { CioView } from "@/features/cio/CioView";
 import { LinksView } from "@/features/links/LinksView";
+import { CalendarView } from "@/features/calendar/CalendarView";
 import { SettingsView } from "@/features/settings/SettingsView";
 import { useSession } from "@/state/session";
 import { useNav } from "@/state/nav";
@@ -47,6 +48,8 @@ function Shell() {
       return <CioView />;
     case "links":
       return <LinksView />;
+    case "calendar":
+      return <CalendarView />;
     case "settings":
       return <SettingsView />;
     default:

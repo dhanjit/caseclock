@@ -37,9 +37,14 @@ export function InvestigationPanel({
   const [uapaDays, setUapaDays] = useState(c.uapaCustodyDays?.toString() ?? "");
   const [custodyEnd, setCustodyEnd] = useState(c.custodyEndDate ?? "");
   const [csFiled, setCsFiled] = useState(c.chargesheetFiledDate ?? "");
+  // FR → MHA pipeline (V4-DELTA §2): FR-I → DG (≤7d) → IR-to-MHA (≤7d) → MHA sanction.
+  const [frI, setFrI] = useState(c.frISubmittedDate ?? "");
   const [frII, setFrII] = useState(c.frIIFiledDate ?? "");
   const [spRemarks, setSpRemarks] = useState(c.spRemarksDate ?? "");
-  const [dgOrder, setDgOrder] = useState(c.dgOrderDate ?? "");
+  const [dgApproved, setDgApproved] = useState(c.dgApprovedDate ?? c.dgOrderDate ?? "");
+  const [irMha, setIrMha] = useState(c.irForMhaDate ?? "");
+  const [mhaSanction, setMhaSanction] = useState(c.mhaSanctionDate ?? "");
+  const [custodyExt, setCustodyExt] = useState(c.custodyExtFiledDate ?? "");
   const [firstPr, setFirstPr] = useState(c.firstPrFiledDate ?? "");
   const [firstRemand, setFirstRemand] = useState(c.firstRemandDate ?? "");
   const [custodyStatus, setCustodyStatus] = useState<"" | "not_arrested" | "in_custody" | "on_bail">(c.custodyStatus ?? "");
@@ -48,6 +53,33 @@ export function InvestigationPanel({
   const [maxSentence, setMaxSentence] = useState(c.maxSentenceYears?.toString() ?? "");
   const [lifeOrDeath, setLifeOrDeath] = useState(!!c.lifeOrDeath);
   const isUapa = lim.caseType === "uapa";
+
+  // Re-seed the buffer from the CURRENT aggregate every time edit opens — the
+  // mount-time snapshot goes stale as other panels (esp. PipelinePanel, which
+  // writes the same dates) save; saving a stale buffer nulled recorded dates
+  // (review finding, live-reproduced).
+  function startEdit() {
+    setArrest(c.arrestDate ?? "");
+    setCaseType(c.custodyCaseType ?? "");
+    setUapaDays(c.uapaCustodyDays?.toString() ?? "");
+    setCustodyEnd(c.custodyEndDate ?? "");
+    setCsFiled(c.chargesheetFiledDate ?? "");
+    setFrI(c.frISubmittedDate ?? "");
+    setFrII(c.frIIFiledDate ?? "");
+    setSpRemarks(c.spRemarksDate ?? "");
+    setDgApproved(c.dgApprovedDate ?? c.dgOrderDate ?? "");
+    setIrMha(c.irForMhaDate ?? "");
+    setMhaSanction(c.mhaSanctionDate ?? "");
+    setCustodyExt(c.custodyExtFiledDate ?? "");
+    setFirstPr(c.firstPrFiledDate ?? "");
+    setFirstRemand(c.firstRemandDate ?? "");
+    setCustodyStatus(c.custodyStatus ?? "");
+    setPpReport(c.uapaPpReportFiledDate ?? "");
+    setUapaExt(!!c.uapaExtensionGranted);
+    setMaxSentence(c.maxSentenceYears?.toString() ?? "");
+    setLifeOrDeath(!!c.lifeOrDeath);
+    setEditing(true);
+  }
 
   async function save() {
     setBusy(true);
@@ -64,9 +96,13 @@ export function InvestigationPanel({
         lifeOrDeath,
         custodyEndDate: custodyEnd || null,
         chargesheetFiledDate: csFiled || null,
+        frISubmittedDate: frI || null,
         frIIFiledDate: frII || null,
         spRemarksDate: spRemarks || null,
-        dgOrderDate: dgOrder || null,
+        dgApprovedDate: dgApproved || null,
+        irForMhaDate: irMha || null,
+        mhaSanctionDate: mhaSanction || null,
+        custodyExtFiledDate: custodyExt || null,
         firstPrFiledDate: firstPr || null,
       });
       setEditing(false);
@@ -107,25 +143,39 @@ export function InvestigationPanel({
             <Field label="Custody end date (production reminder)">
               <input type="date" className={input} value={custodyEnd} onChange={(e) => setCustodyEnd(e.target.value)} />
             </Field>
-            <Field label="Chargesheet / FR-I filed">
+            <Field label="Chargesheet filed in court (register drives this once used)">
               <input type="date" className={input} value={csFiled} onChange={(e) => setCsFiled(e.target.value)} />
             </Field>
             <Field label="First PR filed (≤15d)">
               <input type="date" className={input} value={firstPr} onChange={(e) => setFirstPr(e.target.value)} />
             </Field>
-            <Field label="FR-II filed">
-              <input type="date" className={input} value={frII} onChange={(e) => setFrII(e.target.value)} />
+            <Field label="FR-I submitted (starts the DG 7-day flag)">
+              <input type="date" className={input} value={frI} onChange={(e) => setFrI(e.target.value)} />
             </Field>
-            <Field label="SP remarks date">
-              <input type="date" className={input} value={spRemarks} onChange={(e) => setSpRemarks(e.target.value)} />
+            <Field label="DG approval of FR-I (≤7d of FR-I)">
+              <input type="date" className={input} value={dgApproved} onChange={(e) => setDgApproved(e.target.value)} />
             </Field>
-            <Field label="DG order date">
-              <input type="date" className={input} value={dgOrder} onChange={(e) => setDgOrder(e.target.value)} />
+            <Field label="IR for MHA sanction (≤7d of DG approval)">
+              <input type="date" className={input} value={irMha} onChange={(e) => setIrMha(e.target.value)} />
+            </Field>
+            <Field label="MHA sanction obtained (chargesheet unblocked)">
+              <input type="date" className={input} value={mhaSanction} onChange={(e) => setMhaSanction(e.target.value)} />
             </Field>
             {isUapa && (
-              <Field label="UAPA PP-report filed (≤ day 90)">
-                <input type="date" className={input} value={ppReport} onChange={(e) => setPpReport(e.target.value)} />
-              </Field>
+              <>
+                <Field label="FR-II filed (UAPA)">
+                  <input type="date" className={input} value={frII} onChange={(e) => setFrII(e.target.value)} />
+                </Field>
+                <Field label="SP remarks (UAPA — 150-day line)">
+                  <input type="date" className={input} value={spRemarks} onChange={(e) => setSpRemarks(e.target.value)} />
+                </Field>
+                <Field label="UAPA PP-report filed (≤ day 90)">
+                  <input type="date" className={input} value={ppReport} onChange={(e) => setPpReport(e.target.value)} />
+                </Field>
+                <Field label="Custody extension 90→180 filed (by day 75)">
+                  <input type="date" className={input} value={custodyExt} onChange={(e) => setCustodyExt(e.target.value)} />
+                </Field>
+              </>
             )}
             <Field label="Max sentence (years) — for s.479">
               <input className={input} value={maxSentence} onChange={(e) => setMaxSentence(e.target.value)} inputMode="numeric" placeholder="e.g. 7" />
@@ -156,7 +206,8 @@ export function InvestigationPanel({
 
   const frBuffered = c.arrestDate ? addDays(c.arrestDate, lim.buffered) : null;
   const statutoryAnchor = c.firstRemandDate ?? c.arrestDate;
-  const frStatutory = statutoryAnchor ? addDays(statutoryAnchor, lim.statutory) : null;
+  // Q9 / Wadhawan: the remand day counts — show the last SAFE filing day.
+  const frStatutory = statutoryAnchor ? addDays(statutoryAnchor, lim.statutory - 1) : null;
   const recentMonths = (() => {
     let [y, m] = today.slice(0, 7).split("-").map(Number);
     const out: string[] = [];
@@ -181,12 +232,16 @@ export function InvestigationPanel({
         <Row k="Custody status" v={c.custodyStatus ? c.custodyStatus.replace("_", " ") : "—"} />
         <Row k="Chargesheet/FR-I" v={c.chargesheetFiledDate ? `filed ${fmtDate(c.chargesheetFiledDate)}` : "pending"} />
         <Row k={`FR-I target (${lim.buffered}d)`} v={frBuffered ? fmtDate(frBuffered) : "—"} />
-        <Row k={`Statutory (${lim.statutory}d)`} v={frStatutory ? fmtDate(frStatutory) : "—"} />
+        <Row k={`Statutory last safe day (${lim.statutory}d, Wadhawan)`} v={frStatutory ? fmtDate(frStatutory) : "—"} />
         <Row k="Custody ends" v={fmtDate(c.custodyEndDate)} />
         {isUapa && <Row k="UAPA PP-report" v={c.uapaPpReportFiledDate ? fmtDate(c.uapaPpReportFiledDate) : "pending (≤ day 90)"} />}
-        <Row k="FR-II" v={fmtDate(c.frIIFiledDate)} />
-        <Row k="SP remarks" v={fmtDate(c.spRemarksDate)} />
-        <Row k="DG order" v={fmtDate(c.dgOrderDate)} />
+        {isUapa && <Row k="Custody ext. 90→180" v={c.custodyExtFiledDate ? `filed ${fmtDate(c.custodyExtFiledDate)}` : "not filed (day-75 reminder)"} />}
+        <Row k="FR-I submitted" v={fmtDate(c.frISubmittedDate)} />
+        <Row k="DG approval" v={fmtDate(c.dgApprovedDate ?? c.dgOrderDate)} />
+        <Row k="IR for MHA" v={fmtDate(c.irForMhaDate)} />
+        <Row k="MHA sanction" v={c.mhaSanctionDate ? fmtDate(c.mhaSanctionDate) : c.irForMhaDate ? "pending — chargesheet blocked" : "—"} />
+        {isUapa && <Row k="FR-II" v={fmtDate(c.frIIFiledDate)} />}
+        {isUapa && <Row k="SP remarks" v={fmtDate(c.spRemarksDate)} />}
         <Row k="First PR" v={fmtDate(c.firstPrFiledDate)} />
       </dl>
       <div className="mt-3">
@@ -206,7 +261,7 @@ export function InvestigationPanel({
         </div>
       </div>
       <div className="mt-3 flex justify-end gap-2">
-        <button onClick={() => setEditing(true)} className={btn("ghost")}>Edit dates</button>
+        <button onClick={startEdit} className={btn("ghost")}>Edit dates</button>
       </div>
     </Section>
   );

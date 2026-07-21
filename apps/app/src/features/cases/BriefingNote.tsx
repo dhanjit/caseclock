@@ -15,12 +15,16 @@ import { createPortal } from "react-dom";
 import type { CaseAggregate } from "@/domain/repository";
 import { buildBriefing } from "@/domain/briefing";
 import { todayISO } from "@/rules/dates";
+import { useCio } from "@/state/cio";
+import { useWatchlist } from "@/state/watchlist";
 import { Highlighted } from "@/features/components/Highlighted";
 
 const PRINT_FALLBACK_MS = 60_000;
 
 export function BriefingNote({ agg, onDone }: { agg: CaseAggregate; onDone: () => void }) {
-  const note = buildBriefing(agg, todayISO());
+  const officers = useCio((s) => s.officers);
+  const watchlist = useWatchlist((s) => s.names);
+  const note = buildBriefing(agg, todayISO(), officers, watchlist);
   // Latch onDone so the listener/timeout always see the current callback without
   // re-registering the print lifecycle on every render.
   const doneRef = useRef(onDone);

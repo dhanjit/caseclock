@@ -23,14 +23,15 @@ interface CasesState {
   save: (agg: CaseAggregate) => Promise<void>;
   /** Read-modify-write against the LATEST committed state — overlap-safe. */
   patch: (id: string, updater: (a: CaseAggregate) => CaseAggregate) => Promise<void>;
-  /** Toggle §1 priority. Soft cap ~10 — warns (overCap) but never blocks. */
-  setPriority: (id: string, value: boolean) => Promise<{ priorityCount: number; overCap: boolean }>;
+  /** Toggle §1 priority. HARD cap 10 (V4-DELTA N17 / V6): promoting an 11th case
+   * is blocked — demote one first. Demoting always succeeds. */
+  setPriority: (id: string, value: boolean) => Promise<{ priorityCount: number; blocked: boolean }>;
   remove: (id: string) => Promise<void>;
   getById: (id: string) => CaseAggregate | undefined;
 }
 
-/** Recommended cap on simultaneously-prioritised cases (REQUIREMENTS §1: "~10"). */
-export const PRIORITY_SOFT_CAP = 10;
+/** Hard cap on simultaneously-prioritised cases (V6: "Priority capped at 10 cases. Demote one first."). */
+export const PRIORITY_CAP = 10;
 
 export const useCases = create<CasesState>((set, get) => ({
   aggregates: [],
@@ -60,18 +61,31 @@ export const useCases = create<CasesState>((set, get) => ({
   async setPriority(id, value) {
     // Priority is a supervisory flag, not case work — deliberately does NOT bump
     // lastTouchedAt (so pinning a quiet case can't mask its staleness).
+    let blocked = false;
     await enqueue(async () => {
       const cur = get().aggregates.find((a) => a.case.id === id);
       if (!cur) return;
+      if (value && !cur.case.priority) {
+        const n = get().aggregates.filter((a) => a.case.priority).length;
+        if (n >= PRIORITY_CAP) {
+          blocked = true; // hard cap (V6) — demote one first
+          return;
+        }
+      }
       await repo().save({ ...cur, case: { ...cur.case, priority: value } });
       set({ aggregates: await repo().list() });
     });
     const priorityCount = get().aggregates.filter((a) => a.case.priority).length;
-    return { priorityCount, overCap: value && priorityCount > PRIORITY_SOFT_CAP };
+    return { priorityCount, blocked };
   },
 
   async remove(id) {
     await enqueue(async () => {
+      // V7-9 / Q4 edit-only: recorded cases cannot be deleted — only sample/demo
+      // cases can. (The officer's prototype: "Cases you have entered are
+      // edit-only and cannot be deleted.")
+      const cur = get().aggregates.find((a) => a.case.id === id);
+      if (cur && !cur.case.demo) return;
       await repo().remove(id);
       set({ aggregates: await repo().list() });
     });

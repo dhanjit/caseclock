@@ -56,12 +56,26 @@ function norm(s: string): string {
   return s.normalize("NFC").toLowerCase().trim();
 }
 
+/** Punctuation-tolerant number form (V4-DELTA N18 / V6 `normNum`): lowercase with
+ * spaces, dashes and parens stripped — so "98640-11235" matches "9864011235" and
+ * "FIR 112/2024" matches "112/2024" typed without spacing. */
+export function normNum(s: string): string {
+  return s.normalize("NFC").toLowerCase().replace(/[\s\-()]/g, "");
+}
+
 /** -1 = no match; otherwise a positional bonus: full value (30) > prefix (15) > substring (0). */
-function positional(valueNorm: string, qNorm: string): number {
-  if (!valueNorm.includes(qNorm)) return -1;
+function positionalOne(valueNorm: string, qNorm: string): number {
+  if (!qNorm || !valueNorm.includes(qNorm)) return -1;
   if (valueNorm === qNorm) return 30;
   if (valueNorm.startsWith(qNorm)) return 15;
   return 0;
+}
+
+/** Text match OR (for queries ≥3 chars in number form) punctuation-tolerant match. */
+function positional(value: string, qNorm: string, qNum: string): number {
+  const text = positionalOne(norm(value), qNorm);
+  const num = qNum.length >= 3 ? positionalOne(normNum(value), qNum) : -1;
+  return Math.max(text, num);
 }
 
 export function searchCases(
@@ -71,6 +85,7 @@ export function searchCases(
 ): SearchHit[] {
   const qNorm = norm(query);
   if (!qNorm) return [];
+  const qNum = normNum(query);
 
   const hits: SearchHit[] = [];
 
@@ -87,7 +102,7 @@ export function searchCases(
     const best = new Map<SearchField, SearchHit>();
     const consider = (field: SearchField, value: string | null | undefined, snippet?: string) => {
       if (!value) return;
-      const pos = positional(norm(value), qNorm);
+      const pos = positional(value, qNorm, qNum);
       if (pos < 0) return;
       const score = FIELD_WEIGHT[field] + pos;
       const prev = best.get(field);
@@ -96,8 +111,9 @@ export function searchCases(
       }
     };
 
-    // Case number, identity, sections of law.
+    // Case number (incl. the V7 H1.1 original FIR), identity, sections of law.
     consider("firNumber", c.firNumber);
+    consider("firNumber", c.originalFir);
     consider("identity", c.identity);
     consider("section", c.sectionsOfLaw);
 
@@ -113,7 +129,7 @@ export function searchCases(
     for (const iso of dateValues) {
       if (!iso) continue;
       const disp = fmtDate(iso);
-      const pos = Math.max(positional(norm(iso), qNorm), positional(norm(disp), qNorm));
+      const pos = Math.max(positional(iso, qNorm, qNum), positional(disp, qNorm, qNum));
       if (pos < 0) continue;
       const score = FIELD_WEIGHT.date + pos;
       const prev = best.get("date");
@@ -151,7 +167,7 @@ export function searchCases(
       for (const wl of watchlistNames) {
         const wlNorm = norm(wl);
         if (!corpus.some((blob) => blob.includes(wlNorm))) continue; // present in this case?
-        const pos = positional(wlNorm, qNorm); // does the query match the banned-org name?
+        const pos = positional(wl, qNorm, qNum); // does the query match the banned-org name?
         if (pos < 0) continue;
         const score = FIELD_WEIGHT.watchlist + pos;
         const prev = best.get("watchlist");

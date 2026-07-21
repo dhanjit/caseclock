@@ -23,8 +23,8 @@ const input = "w-full rounded-xl border border-line bg-surface-2 px-3 py-2 text-
 const KIND_BADGE: Record<AttachmentKind, string> = {
   accused: "border-court/40 bg-court/15 text-court",
   place: "border-statutory/40 bg-statutory/15 text-statutory",
-  evidence: "border-violet-500/40 bg-violet-500/15 text-violet-300",
-  doc: "border-slate-500/40 bg-slate-500/15 text-slate-300",
+  evidence: "border-violet-500/40 bg-violet-100 text-violet-900",
+  doc: "border-slate-500/40 bg-slate-200 text-slate-700",
   other: "border-line bg-surface-3 text-ink-dim",
 };
 

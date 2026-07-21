@@ -9,12 +9,16 @@ import { BlobStore } from "@/db/blob-store";
 import { blobRefCount } from "@/db/blob-refs";
 import type {
   CaseRecord,
+  ChargesheetRecord,
+  CommsRequestRecord,
+  CustodyMovementRecord,
   EvidenceRecord,
   HearingRecord,
   PersonRecord,
   ProcessRequestRecord,
   SupervisionEntryRecord,
   TaskRecord,
+  TowerDumpRecord,
 } from "./types";
 
 export interface CaseAggregate {
@@ -25,6 +29,79 @@ export interface CaseAggregate {
   tasks: TaskRecord[];
   evidence?: EvidenceRecord[]; // §5 / heading 9 — added in Phase 3 (optional for old records)
   processRequests?: ProcessRequestRecord[]; // §6 Process & Requests tracker (V3 — optional for old records)
+  chargesheets?: ChargesheetRecord[]; // V4-DELTA N1 — chargesheet register (optional for old records)
+  commsRequests?: CommsRequestRecord[]; // V4-DELTA N3 — CDR/IPDR/IMEI registers
+  towerDumps?: TowerDumpRecord[]; // V4-DELTA N3 — tower-dump register
+  custodyMovements?: CustodyMovementRecord[]; // V4-DELTA N2 — chain-of-custody ledger
+}
+
+/** True once any chargesheet is on the register (V6 `csFiled`) — falls back to the
+ * legacy case-level date for aggregates saved before the register existed. */
+export function chargesheetFiled(agg: Pick<CaseAggregate, "case" | "chargesheets">): boolean {
+  return (agg.chargesheets ?? []).length > 0 || !!agg.case.chargesheetFiledDate;
+}
+
+/**
+ * Normalize an aggregate read from the vault (V4-DELTA §6 migrations, JSON-level).
+ *
+ * ONE-TIME legacy migrations — gated on `legacyMigrated` and stamped after running,
+ * so an officer's later CLEAR of a migrated value is never silently resurrected
+ * (review finding):
+ *  - legacy `dgOrderDate` copies onto `dgApprovedDate`
+ *  - the two legacy fixed sanction fields lift into `sanctions[]`
+ *  - a case-level arrestDate copies to in-custody accused missing their own
+ *  - a legacy case-level `chargesheetFiledDate` with an EMPTY register becomes
+ *    register row #1 (kind main, case-wide coverage) per V4-DELTA §6
+ *
+ * ALWAYS-ON derivation: `chargesheetFiledDate` = earliest register date once any
+ * row exists (the register is the source of truth; rows are editable in the UI).
+ */
+export function hydrateAggregate(agg: CaseAggregate): CaseAggregate {
+  const c = { ...agg.case };
+  let chargesheets = agg.chargesheets ?? [];
+  let persons = agg.persons;
+
+  if (!c.legacyMigrated) {
+    if (!c.dgApprovedDate && c.dgOrderDate) c.dgApprovedDate = c.dgOrderDate;
+
+    if (!c.sanctions) {
+      const legacy: CaseRecord["sanctions"] = [];
+      if (c.sanctionStatutory && c.sanctionStatutory !== "na")
+        legacy.push({ id: `${c.id}-sanction-statutory`, kind: "Statutory (UAPA s.45)", state: c.sanctionStatutory, date: c.sanctionStatutory === "obtained" ? c.rule4SanctionDate ?? null : null });
+      if (c.sanctionDg && c.sanctionDg !== "na")
+        legacy.push({ id: `${c.id}-sanction-dg`, kind: "DG sanction", state: c.sanctionDg, date: null });
+      if (legacy.length) c.sanctions = legacy;
+    }
+
+    const inCustody = new Set(["police_custody", "judicial_custody", "charge_sheeted"]);
+    persons = agg.persons.map((p) =>
+      p.role === "accused" && !p.arrestDate && c.arrestDate && p.accusedStatus && inCustody.has(p.accusedStatus)
+        ? { ...p, arrestDate: c.arrestDate }
+        : p,
+    );
+
+    if (chargesheets.length === 0 && c.chargesheetFiledDate) {
+      // V4-DELTA §6: the legacy single date becomes register row #1. Empty
+      // accusedIds = case-wide coverage (legacy semantics), so clocks behave
+      // exactly as before the register existed.
+      chargesheets = [{
+        id: `${c.id}-cs-legacy`,
+        caseId: c.id,
+        kind: "main",
+        date: c.chargesheetFiledDate,
+        accusedIds: [],
+        note: "Migrated from the case-level filing date.",
+      }];
+    }
+
+    c.legacyMigrated = true;
+  }
+
+  if (chargesheets.length > 0) {
+    c.chargesheetFiledDate = [...chargesheets].map((cs) => cs.date).sort()[0];
+  }
+
+  return { ...agg, case: c, persons, chargesheets };
 }
 
 export class CaseRepository {
@@ -35,6 +112,9 @@ export class CaseRepository {
   }
 
   async save(agg: CaseAggregate, now: number = Date.now()): Promise<void> {
+    // Persist hydrated so derived fields (chargesheetFiledDate ← register) are
+    // consistent in storage too, not only after read.
+    agg = hydrateAggregate(agg);
     const c = agg.case;
     await this.db.exec(
       `INSERT INTO cases (id, fir_number, uapa, status, data, updated_at)
@@ -51,12 +131,12 @@ export class CaseRepository {
 
   async get(id: string): Promise<CaseAggregate | null> {
     const rows = await this.db.query<{ data: string }>("SELECT data FROM cases WHERE id = ?", [id]);
-    return rows.length ? (JSON.parse(rows[0].data) as CaseAggregate) : null;
+    return rows.length ? hydrateAggregate(JSON.parse(rows[0].data) as CaseAggregate) : null;
   }
 
   async list(): Promise<CaseAggregate[]> {
     const rows = await this.db.query<{ data: string }>("SELECT data FROM cases ORDER BY updated_at DESC");
-    return rows.map((r) => JSON.parse(r.data) as CaseAggregate);
+    return rows.map((r) => hydrateAggregate(JSON.parse(r.data) as CaseAggregate));
   }
 
   async remove(id: string): Promise<void> {

@@ -19,7 +19,7 @@ function deadlines(id: string): DeadlineEvent[] {
   const a = byId(id);
   return computeDeadlines(a.case, a.persons, a.hearings, DEFAULT_SETTINGS, TODAY, a.evidence ?? [], a.processRequests ?? []);
 }
-const expert = (id: string) => deadlines(id).filter((d) => d.ruleId === "expert-report-2day");
+const expert = (id: string) => deadlines(id).filter((d) => d.ruleId === "expert-report-pending");
 const requests = (id: string) => deadlines(id).filter((d) => d.ruleId === "process-request-overdue");
 
 describe("Case 1 — NIA 04/2024 (SLP @ SC, trial ongoing)", () => {

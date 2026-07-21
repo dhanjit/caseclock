@@ -7,12 +7,16 @@ import { diffDays, todayISO } from "@/rules/dates";
 import {
   DEFAULT_SETTINGS,
   type CaseRecord,
+  type ChargesheetRecord,
+  type CommsRequestRecord,
+  type CustodyMovementRecord,
   type DeadlineEvent,
   type EvidenceRecord,
   type HearingRecord,
   type PersonRecord,
   type ProcessRequestRecord,
   type SupervisionEntryRecord,
+  type TowerDumpRecord,
 } from "@/domain/types";
 import { newId } from "@/lib/id";
 import { fmtDate, relativeDays, severityTone, toneText } from "@/lib/format";
@@ -22,6 +26,9 @@ import { TopBar, btn } from "@/features/components/TopBar";
 import { CaseFile } from "./CaseFile";
 import { AccusedPanel } from "./AccusedPanel";
 import { InvestigationPanel } from "./InvestigationPanel";
+import { PipelinePanel } from "./PipelinePanel";
+import { CommsPanel } from "./CommsPanel";
+import { CustodyLedgerPanel } from "./CustodyLedgerPanel";
 import { TrialPanel } from "./TrialPanel";
 import { HearingsPanel } from "./HearingsPanel";
 import { EvidencePanel } from "./EvidencePanel";
@@ -76,6 +83,9 @@ export function CaseDetail({ id }: { id: string }) {
             today,
             agg.evidence ?? [],
             agg.processRequests ?? [],
+            agg.commsRequests ?? [],
+            agg.towerDumps ?? [],
+            agg.chargesheets ?? [],
           )
         : [],
     [agg, today],
@@ -132,27 +142,47 @@ export function CaseDetail({ id }: { id: string }) {
     }
   }
 
-  // Overlap-safe: patch reads the LATEST committed aggregate, so two panels saving
-  // near-simultaneously compose instead of clobbering each other.
+  // Overlap-safe: patch reads the LATEST committed aggregate. Array saves accept an
+  // UPDATER FUNCTION resolved against that latest state — a panel passing a plain
+  // array is a render-time snapshot, and two quick edits from the same render were
+  // clobbering each other (review finding, live-reproduced).
+  type ArrOrFn<T> = T[] | ((prev: T[]) => T[]);
+  function resolveArr<T>(v: ArrOrFn<T>, prev: T[]): T[] {
+    return typeof v === "function" ? (v as (p: T[]) => T[])(prev) : v;
+  }
   async function saveCase(patchObj: Partial<CaseRecord>) {
     await patch(id, (a) => ({ ...a, case: { ...a.case, ...patchObj, lastTouchedAt: today } }));
   }
-  async function savePersons(persons: PersonRecord[]) {
-    await patch(id, (a) => ({ ...a, persons, case: { ...a.case, lastTouchedAt: today } }));
+  async function savePersons(persons: ArrOrFn<PersonRecord>) {
+    await patch(id, (a) => ({ ...a, persons: resolveArr(persons, a.persons), case: { ...a.case, lastTouchedAt: today } }));
   }
-  async function saveHearings(hearings: HearingRecord[]) {
-    await patch(id, (a) => ({ ...a, hearings, case: { ...a.case, lastTouchedAt: today } }));
+  async function saveHearings(hearings: ArrOrFn<HearingRecord>) {
+    await patch(id, (a) => ({ ...a, hearings: resolveArr(hearings, a.hearings), case: { ...a.case, lastTouchedAt: today } }));
   }
-  async function saveEvidence(evidence: EvidenceRecord[]) {
-    await patch(id, (a) => ({ ...a, evidence, case: { ...a.case, lastTouchedAt: today } }));
+  async function saveEvidence(evidence: ArrOrFn<EvidenceRecord>) {
+    await patch(id, (a) => ({ ...a, evidence: resolveArr(evidence, a.evidence ?? []), case: { ...a.case, lastTouchedAt: today } }));
   }
-  async function saveRequests(processRequests: ProcessRequestRecord[]) {
-    await patch(id, (a) => ({ ...a, processRequests, case: { ...a.case, lastTouchedAt: today } }));
+  async function saveRequests(processRequests: ArrOrFn<ProcessRequestRecord>) {
+    await patch(id, (a) => ({ ...a, processRequests: resolveArr(processRequests, a.processRequests ?? []), case: { ...a.case, lastTouchedAt: today } }));
+  }
+  async function saveChargesheets(chargesheets: ArrOrFn<ChargesheetRecord>) {
+    // chargesheetFiledDate re-derives from the register on save (hydrateAggregate).
+    await patch(id, (a) => ({ ...a, chargesheets: resolveArr(chargesheets, a.chargesheets ?? []), case: { ...a.case, lastTouchedAt: today } }));
+  }
+  async function saveComms(commsRequests: ArrOrFn<CommsRequestRecord>) {
+    await patch(id, (a) => ({ ...a, commsRequests: resolveArr(commsRequests, a.commsRequests ?? []), case: { ...a.case, lastTouchedAt: today } }));
+  }
+  async function saveTowers(towerDumps: ArrOrFn<TowerDumpRecord>) {
+    await patch(id, (a) => ({ ...a, towerDumps: resolveArr(towerDumps, a.towerDumps ?? []), case: { ...a.case, lastTouchedAt: today } }));
+  }
+  async function saveMovements(custodyMovements: ArrOrFn<CustodyMovementRecord>) {
+    await patch(id, (a) => ({ ...a, custodyMovements: resolveArr(custodyMovements, a.custodyMovements ?? []), case: { ...a.case, lastTouchedAt: today } }));
   }
   async function togglePriority() {
     if (!agg) return;
-    const { priorityCount, overCap } = await setPriority(id, !agg.case.priority);
-    setPriorityWarn(overCap ? `${priorityCount} cases are flagged priority — the recommended cap is ~10. Consider demoting a quieter one.` : null);
+    const { blocked } = await setPriority(id, !agg.case.priority);
+    // V6 hard cap: "Priority capped at 10 cases. Demote one first."
+    setPriorityWarn(blocked ? "Priority is capped at 10 cases. Demote one first." : null);
   }
   function exportCaseIcs() {
     if (!agg) return;
@@ -231,7 +261,7 @@ export function CaseDetail({ id }: { id: string }) {
               <dd className="text-ink">
                 {clocks.length ? (
                   clocks.slice(0, 3).map((d, i) => (
-                    <span key={`${d.ruleId}:${d.occurrenceDate ?? ""}`}>
+                    <span key={`${d.ruleId}:${d.occurrenceDate ?? ""}:${d.instanceId ?? ""}`}>
                       {i > 0 ? " · " : ""}
                       {d.type} {d.dueAt ? relativeDays(d.dueAt, today) : ""}
                     </span>
@@ -260,23 +290,26 @@ export function CaseDetail({ id }: { id: string }) {
         ) : (
           <div className="space-y-1.5">
             {clocks.map((d) => (
-              <ClockRow key={`${d.ruleId}:${d.occurrenceDate ?? ""}`} d={d} today={today} />
+              <ClockRow key={`${d.ruleId}:${d.occurrenceDate ?? ""}:${d.instanceId ?? ""}`} d={d} today={today} />
             ))}
           </div>
         )}
       </Section>
 
       {/* The officer's 13-heading case file + the 11-status accused list */}
-      <CaseFile agg={agg} onSaveCase={saveCase} />
+      <CaseFile agg={agg} onSaveCase={saveCase} onSaveChargesheets={saveChargesheets} />
       <AccusedPanel agg={agg} onSavePersons={savePersons} />
 
       {/* The two engines: investigation (FR/PR/custody) + court-trial (timeline + hearings) */}
       <InvestigationPanel agg={agg} onSaveCase={saveCase} />
+      <PipelinePanel agg={agg} onSaveCase={saveCase} />
       <TrialPanel agg={agg} onSaveCase={saveCase} />
       <HearingsPanel agg={agg} onSaveHearings={saveHearings} />
 
-      {/* Phase 3 panels: evidence·sanctions·place·reference laws */}
+      {/* Phase 3 + T2 panels: evidence·custody ledger·comms·sanctions·place·reference */}
       <EvidencePanel agg={agg} onSaveEvidence={saveEvidence} />
+      <CustodyLedgerPanel agg={agg} onSaveMovements={saveMovements} />
+      <CommsPanel agg={agg} onSaveComms={saveComms} onSaveTowers={saveTowers} />
       <RequestsPanel agg={agg} onSaveRequests={saveRequests} />
       <SanctionsPanel agg={agg} onSaveCase={saveCase} />
       <PlacePanel agg={agg} onSaveCase={saveCase} />

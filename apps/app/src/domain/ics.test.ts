@@ -106,8 +106,8 @@ describe("eventUid", () => {
 
   it("strips RFC-5545 TEXT delimiters (, ; : \\) so the UID stays one bare token", () => {
     // d.type can carry user free-text (process-request label, expert-report 'reportToObtain').
-    const uid = eventUid("c1", "expert-report-2day", "2026-06-27-evil, and; bad: x\\y");
-    expect(uid).toBe("c1-expert-report-2day-2026-06-27-evil-and-bad-x-y@caseclock");
+    const uid = eventUid("c1", "expert-report-pending", "2026-06-27-evil, and; bad: x\\y");
+    expect(uid).toBe("c1-expert-report-pending-2026-06-27-evil-and-bad-x-y@caseclock");
     // No raw delimiter survives anywhere except the intended trailing @caseclock suffix.
     expect(uid.replace("@caseclock", "")).not.toMatch(/[,;:\\@]/);
   });
@@ -222,7 +222,7 @@ describe("buildCaseIcs — skip rules", () => {
 });
 
 describe("buildCaseIcs — evidence + processRequest threading (regression guard)", () => {
-  // A case whose ONLY computable deadlines are the expert-report-2day (from evidence)
+  // A case whose ONLY computable deadlines are the expert-report-pending (from evidence)
   // and the process-request-overdue (from processRequests). If the builder forgot to
   // thread evidence/processRequests into computeDeadlines, BOTH would vanish.
   const c = minimalCase({ id: "c-thread", firNumber: "FIR 9/2026", chargesheetFiledDate: "2026-06-01" });
@@ -258,7 +258,7 @@ describe("buildCaseIcs — evidence + processRequest threading (regression guard
 
   it("includes BOTH the expert-report and the process-request events", () => {
     const lines = unfold(buildCaseIcs(agg, DEFAULT_SETTINGS, TODAY, OPTS));
-    expect(lines.some((l) => l.startsWith("UID:") && l.includes("expert-report-2day"))).toBe(true);
+    expect(lines.some((l) => l.startsWith("UID:") && l.includes("expert-report-pending"))).toBe(true);
     expect(lines.some((l) => l.startsWith("UID:") && l.includes("process-request-overdue"))).toBe(true);
   });
 });
@@ -354,7 +354,7 @@ describe("sample fixtures end-to-end", () => {
     const lines = unfold(buildAllCasesIcs(sampleAggregates(), DEFAULT_SETTINGS, TODAY, OPTS));
     // Case 2 passport-forgery expert report (forwarded 10 Jun → overdue) and the
     // FRRO/MEA process request (expected 20 Jun → overdue) should both appear.
-    expect(lines.some((l) => l.startsWith("UID:") && l.includes("expert-report-2day"))).toBe(true);
+    expect(lines.some((l) => l.startsWith("UID:") && l.includes("expert-report-pending"))).toBe(true);
     expect(lines.some((l) => l.startsWith("UID:") && l.includes("process-request-overdue"))).toBe(true);
   });
 });

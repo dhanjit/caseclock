@@ -300,7 +300,7 @@ function NotificationSettings() {
           <span className="text-xs text-ink-dim">Fires in ~2 minutes — lock the device to see it.</span>
         )}
         {testState === "denied" && (
-          <span className="text-xs text-red-400">Notifications are denied — enable them in iOS Settings.</span>
+          <span className="text-xs text-critical">Notifications are denied — enable them in iOS Settings.</span>
         )}
       </div>
     </Section>

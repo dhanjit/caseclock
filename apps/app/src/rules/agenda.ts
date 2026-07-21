@@ -80,6 +80,9 @@ export function buildAgenda(
       today,
       agg.evidence ?? [],
       agg.processRequests ?? [],
+      agg.commsRequests ?? [],
+      agg.towerDumps ?? [],
+      agg.chargesheets ?? [],
     );
     for (const d of deadlines) {
       const bucket = bucketFor(d, today, horizon);
@@ -135,6 +138,8 @@ export function casesNeedingAttention(
       today,
       agg.evidence ?? [],
       agg.processRequests ?? [],
+      agg.commsRequests ?? [],
+      agg.towerDumps ?? [],
     );
     const reasons: string[] = [];
     if (deadlines.some((d) => d.ruleId === "untouched")) reasons.push("untouched");

@@ -194,11 +194,16 @@ current-month-only PR check.
 
 ## 7. Build order (green-lit sequence)
 
-> **Status 2026-07-21: T1 SHIPPED** (branch `claude/casetrack-html-review-5decb1`,
-> commits `5d199df`→`212c2f3`): schema/domain, engine rewires + 4 new rules,
-> integrity checks, normNum search, reference refresh, extended seed, ledger
-> design system, and all T1 screens — 267 tests + typecheck green, flows
-> verified in the browser. T2/T3 below remain.
+> **Status 2026-07-21: T1 + T2 SHIPPED** (branch `claude/casetrack-html-review-5decb1`,
+> commits `5d199df`→`15c2297`). T1: schema/domain, engine rewires + 4 new rules,
+> integrity checks, normNum search, reference refresh, ledger design system, all
+> T1 screens. T2: comms registers (CDR/IPDR/IMEI/tower) + pendency rules, the
+> cross-case **Links** map, custody movement ledger, report observations (High →
+> briefing note), FR→MHA pipeline stepper, sanctions[] list panel, briefing note
+> V7 sub-headings + registers; `window.confirm` eliminated app-wide. 276 tests +
+> typecheck green, all flows browser-verified. **T3 remains**: calendar view,
+> H8/H13 dated logs + routing, dashboard heat tiles, .doc export, full edit-only
+> sweep, witness re-rank/examined, documents-register rework, dark mode.
 
 1. **T1 — spines** (schema migration + low-risk extensions): chargesheet
    register · per-accused arrest/bail · conviction + appeal (Q3/Q7) · integrity

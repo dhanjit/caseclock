@@ -64,9 +64,11 @@ export interface EvidenceRecord {
   // Expert-report 2-day auto-alert (REQUIREMENTS §4.1): FSL / ballistic / device
   // imaging etc. fire RED once pending beyond 2 days from the forwarding date and
   // clear the instant the report is marked received.
-  reportKind?: "expert" | "other"; // only "expert" reports drive the 2-day alert
+  reportKind?: "expert" | "other"; // only "expert" reports drive the pendency alert
   forwardedDate?: ISODate | null; // date the exhibit/sample was sent to the lab
   receivedDate?: ISODate | null; // optional — set when the report comes back
+  exhibitNo?: string; // M-1 / D-1 style exhibit number (links the custody ledger)
+  observations?: EvidenceObservation[]; // V4-DELTA N5 — officer remarks, High/Normal
 }
 
 /** LOC / Interpol notices per accused (§5). */
@@ -201,6 +203,68 @@ export interface CioRecord {
   id: string;
   name: string;
   rank?: string;
+}
+
+/** Comms registers (V4-DELTA N3 / V6): CDR / IPDR / IMEI request rows. Identifiers
+ * only — no raw CDR content is ever ingested. Pending = numbers − received; the
+ * row overdue-alerts past `expectedDate` while anything is pending. These rows
+ * auto-feed the cross-case Links map (N4). */
+export interface CommsRequestRecord {
+  id: string;
+  caseId: string;
+  kind: "cdr" | "ipdr" | "imei";
+  ref: string; // letter no. · date
+  numbers: string[]; // identifiers requested (phone numbers / IMEIs)
+  receivedCount: number;
+  expectedDate?: ISODate | null;
+}
+
+export const COMMS_KIND_LABEL: Record<CommsRequestRecord["kind"], string> = {
+  cdr: "CDR — call detail records",
+  ipdr: "IPDR — internet/session records",
+  imei: "IMEI — device identifiers",
+};
+
+/** Tower dump register (V4-DELTA N3): site / time-window based, no identifiers. */
+export interface TowerDumpRecord {
+  id: string;
+  caseId: string;
+  ref: string;
+  site?: string; // BTS / cluster
+  timeWindow?: string;
+  status: "pending" | "received";
+  expectedDate?: ISODate | null;
+}
+
+/** Chain-of-custody movement ledger (V4-DELTA N2 / V6): one row per leg —
+ * Malkhana → FSL → Malkhana → Court… An open leg (no backDate) means the exhibit
+ * is OUT; a seal broken on return is flagged RED and never un-rung. */
+export interface CustodyMovementRecord {
+  id: string;
+  caseId: string;
+  exhibitNo: string; // free text; optionally linked to an evidence row
+  evidenceId?: string | null;
+  nature?: string;
+  outDate: ISODate;
+  backDate?: ISODate | null;
+  from: string; // default "Malkhana" — a waypoint, not an owner
+  to: string;
+  purpose?: string; // FSL / Court exhibit / …
+  sealIntact: boolean;
+}
+
+/** Exhibits currently out of the Malkhana (open legs). */
+export function openExhibits(movements: CustodyMovementRecord[]): CustodyMovementRecord[] {
+  return movements.filter((m) => !m.backDate);
+}
+
+/** The officer's remark on a received expert/FSL report (V4-DELTA N5). High-flagged
+ * observations rise to the top and enter the briefing note. */
+export interface EvidenceObservation {
+  id: string;
+  date: ISODate;
+  flag: "high" | "normal";
+  text: string;
 }
 
 export interface CaseRecord {

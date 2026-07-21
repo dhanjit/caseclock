@@ -77,6 +77,8 @@ export function CaseDetail({ id }: { id: string }) {
             today,
             agg.evidence ?? [],
             agg.processRequests ?? [],
+            agg.commsRequests ?? [],
+            agg.towerDumps ?? [],
           )
         : [],
     [agg, today],

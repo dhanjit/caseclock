@@ -32,6 +32,8 @@ import {
   earliestArrest,
   processRequestLabel,
   type CaseRecord,
+  type CommsRequestRecord,
+  type TowerDumpRecord,
   type DeadlineEvent,
   type DeadlineState,
   type DeadlineTrack,
@@ -61,6 +63,8 @@ interface RuleCtx {
   hearings: HearingRecord[];
   evidence: EvidenceRecord[];
   processRequests: ProcessRequestRecord[];
+  commsRequests: CommsRequestRecord[];
+  towerDumps: TowerDumpRecord[];
   settings: Settings;
   today: ISODate;
 }
@@ -751,6 +755,54 @@ export const RULE_REGISTRY: Rule[] = [
         })),
   },
 
+  // ---- Comms registers (V4-DELTA N3 / V6) --------------------------------
+  // CDR/IPDR/IMEI: pending = numbers - received; overdue past the expected date
+  // while anything is pending. Identifiers only - no raw CDR is ingested.
+  {
+    id: "comms-pending",
+    lawRef: "CDR/IPDR/IMEI pendency - expected-date follow-up (V6 preview)",
+    verified: "confirmed",
+    severity: "statutory",
+    track: "investigation",
+    leadOffsets: [3, 1],
+    applies: () => true,
+    compute: ({ commsRequests, today }) =>
+      commsRequests
+        .filter((r) => !!r.expectedDate)
+        .map((r) => {
+          const pending = Math.max(0, (r.numbers ?? []).length - (r.receivedCount ?? 0));
+          return {
+            type: `${r.kind.toUpperCase()} - ${pending} of ${(r.numbers ?? []).length} pending (${r.ref})`,
+            dueAt: r.expectedDate!,
+            occurrenceDate: r.expectedDate!,
+            instanceId: r.id,
+            state: pending === 0 ? ("done" as const) : stateVs(r.expectedDate!, today, false),
+            owes: "self" as const,
+            note: "Service-provider follow-up; clears when every requested identifier is received.",
+          };
+        }),
+  },
+  {
+    id: "tower-pending",
+    lawRef: "Tower-dump pendency - expected-date follow-up (V6 preview)",
+    verified: "confirmed",
+    severity: "statutory",
+    track: "investigation",
+    leadOffsets: [3, 1],
+    applies: () => true,
+    compute: ({ towerDumps, today }) =>
+      towerDumps
+        .filter((t) => !!t.expectedDate)
+        .map((t) => ({
+          type: `Tower dump - ${t.site || t.ref} ${t.status === "received" ? "received" : "pending"}`,
+          dueAt: t.expectedDate!,
+          occurrenceDate: t.expectedDate!,
+          instanceId: t.id,
+          state: t.status === "received" ? ("done" as const) : stateVs(t.expectedDate!, today, false),
+          owes: "self" as const,
+        })),
+  },
+
   // ---- Supervisory -------------------------------------------------------
   {
     id: "review-overdue",
@@ -833,11 +885,13 @@ export function computeDeadlines(
   today: ISODate,
   evidence: EvidenceRecord[] = [],
   processRequests: ProcessRequestRecord[] = [],
+  commsRequests: CommsRequestRecord[] = [],
+  towerDumps: TowerDumpRecord[] = [],
 ): DeadlineEvent[] {
   const out: DeadlineEvent[] = [];
   for (const rule of RULE_REGISTRY) {
     if (!rule.applies(c)) continue;
-    const res = rule.compute({ c, persons, hearings, evidence, processRequests, settings, today });
+    const res = rule.compute({ c, persons, hearings, evidence, processRequests, commsRequests, towerDumps, settings, today });
     if (!res) continue;
     for (const r of Array.isArray(res) ? res : [res]) {
       out.push({

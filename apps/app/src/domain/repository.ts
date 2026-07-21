@@ -10,12 +10,15 @@ import { blobRefCount } from "@/db/blob-refs";
 import type {
   CaseRecord,
   ChargesheetRecord,
+  CommsRequestRecord,
+  CustodyMovementRecord,
   EvidenceRecord,
   HearingRecord,
   PersonRecord,
   ProcessRequestRecord,
   SupervisionEntryRecord,
   TaskRecord,
+  TowerDumpRecord,
 } from "./types";
 
 export interface CaseAggregate {
@@ -27,6 +30,9 @@ export interface CaseAggregate {
   evidence?: EvidenceRecord[]; // §5 / heading 9 — added in Phase 3 (optional for old records)
   processRequests?: ProcessRequestRecord[]; // §6 Process & Requests tracker (V3 — optional for old records)
   chargesheets?: ChargesheetRecord[]; // V4-DELTA N1 — chargesheet register (optional for old records)
+  commsRequests?: CommsRequestRecord[]; // V4-DELTA N3 — CDR/IPDR/IMEI registers
+  towerDumps?: TowerDumpRecord[]; // V4-DELTA N3 — tower-dump register
+  custodyMovements?: CustodyMovementRecord[]; // V4-DELTA N2 — chain-of-custody ledger
 }
 
 /** True once any chargesheet is on the register (V6 `csFiled`) — falls back to the

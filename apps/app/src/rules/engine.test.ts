@@ -402,6 +402,40 @@ describe("process & requests tracker (§6) — expected-response overdue", () =>
   });
 });
 
+describe("comms registers (V4-DELTA N3) — CDR/IPDR/IMEI + tower pendency", () => {
+  const comms = (over: Partial<import("@/domain/types").CommsRequestRecord>) => ({
+    id: "cr1", caseId: "c1", kind: "cdr" as const, ref: "L-0771/26 · 06 Jun 2026",
+    numbers: ["70029-44810", "90850-33127", "77380-99012"], receivedCount: 1,
+    expectedDate: "2026-06-22", ...over,
+  });
+  const runC = (today: string, rows: ReturnType<typeof comms>[], towers: import("@/domain/types").TowerDumpRecord[] = []) =>
+    computeDeadlines(mk({}), [], [], DEFAULT_SETTINGS, today, [], [], rows, towers);
+
+  it("pending identifiers past the expected date go overdue; before it, active", () => {
+    const before = runC("2026-06-20", [comms({})]).find((d) => d.ruleId === "comms-pending")!;
+    expect(before.state).toBe("active");
+    expect(before.type).toMatch(/CDR - 2 of 3 pending/);
+    const after = runC("2026-06-27", [comms({})]).find((d) => d.ruleId === "comms-pending")!;
+    expect(after.state).toBe("overdue");
+  });
+
+  it("fully received rows are done; rows without an expected date never alert", () => {
+    expect(runC("2026-06-27", [comms({ receivedCount: 3 })]).find((d) => d.ruleId === "comms-pending")!.state).toBe("done");
+    expect(runC("2026-06-27", [comms({ expectedDate: null })]).filter((d) => d.ruleId === "comms-pending")).toHaveLength(0);
+  });
+
+  it("tower dumps alert until received", () => {
+    const t: import("@/domain/types").TowerDumpRecord = {
+      id: "t1", caseId: "c1", ref: "L-0790/26", site: "Paltan Bazar BTS", timeWindow: "02-Jun 12:00–14:00",
+      status: "pending", expectedDate: "2026-06-28",
+    };
+    const row = runC("2026-07-01", [], [t]).find((d) => d.ruleId === "tower-pending")!;
+    expect(row.state).toBe("overdue");
+    expect(row.type).toMatch(/Paltan Bazar BTS/);
+    expect(runC("2026-07-01", [], [{ ...t, status: "received" }]).find((d) => d.ruleId === "tower-pending")!.state).toBe("done");
+  });
+});
+
 describe("routine trial 15-day lead (§4.2)", () => {
   it("routine (non-superior) court hearings now carry a 15-day lead, not 10", () => {
     const hearings: HearingRecord[] = [{ id: "h", caseId: "c1", hearingDate: "2026-07-20", purpose: "trial" }];
@@ -423,6 +457,8 @@ const EXPECTED_LAWREFS: Record<string, string> = {
   "mha-sanction-pending": "MHA sanction — chargesheet blocked until obtained (V6 preview)",
   "bail-date-accused": "Bail matter on accused row — V6 preview (heading 12)",
   "appeal-window-accused": "Appeal window per convicted accused (V4-DELTA Q3/Q7)",
+  "comms-pending": "CDR/IPDR/IMEI pendency - expected-date follow-up (V6 preview)",
+  "tower-pending": "Tower-dump pendency - expected-date follow-up (V6 preview)",
   "custody-production": "BNSS — custody / production",
   "pr-first": "First PR ≤ 15 days of registration",
   "pr-monthly": "Monthly PR from the 1st; critical by the 7th",

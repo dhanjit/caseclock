@@ -17,7 +17,16 @@
 
 import { monthsBetween } from "@/rules/dates";
 import type { CaseAggregate } from "./repository";
-import type { CaseRecord, ChargesheetRecord, CioRecord, PersonRecord, ProcessRequestRecord } from "./types";
+import type {
+  CaseRecord,
+  ChargesheetRecord,
+  CioRecord,
+  CommsRequestRecord,
+  CustodyMovementRecord,
+  PersonRecord,
+  ProcessRequestRecord,
+  TowerDumpRecord,
+} from "./types";
 
 /** Banned-org names to seed onto the global watchlist (auto-RED system-wide, §5). */
 export const SAMPLE_WATCHLIST = ["ULFA-I"];
@@ -158,14 +167,34 @@ const case1: CaseAggregate = {
   ],
   tasks: [],
   evidence: [
-    { id: "c1-ev1", caseId: C1, description: "RDX sample (M-1)", reportToObtain: "FSL Explosives report", status: "received", reportKind: "expert", forwardedDate: "2024-03-10", receivedDate: "2024-04-02", witnesses: 2 },
-    { id: "c1-ev2", caseId: C1, description: "Two pistols + 9 rounds", reportToObtain: "Ballistic report", status: "received", reportKind: "expert", forwardedDate: "2024-03-12", receivedDate: "2024-04-19", witnesses: 2 },
-    { id: "c1-ev3", caseId: C1, description: "Seized mobile phones (×3)", reportToObtain: "Device imaging / CFSL cyber report", status: "pending", reportKind: "expert", forwardedDate: "2024-03-15", witnesses: 1 },
-    { id: "c1-ev4", caseId: C1, description: "Vehicle (offending)", reportToObtain: "MVI mechanical report", status: "received", reportKind: "other", forwardedDate: "2024-03-10", receivedDate: "2024-03-15", witnesses: 1 },
+    { id: "c1-ev1", caseId: C1, exhibitNo: "M-1", description: "RDX sample (M-1)", reportToObtain: "FSL Explosives report", status: "received", reportKind: "expert", forwardedDate: "2024-03-10", receivedDate: "2024-04-02", witnesses: 2,
+      // V4-DELTA N5 — High-flagged observation rises to the top + enters the briefing note.
+      observations: [{ id: "c1-ev1-o1", date: "2024-04-03", flag: "high", text: "Confirms RDX with high purity — links to a military-grade source. Central to the conspiracy charge." }] },
+    { id: "c1-ev2", caseId: C1, exhibitNo: "M-2", description: "Two pistols + 9 rounds", reportToObtain: "Ballistic report", status: "received", reportKind: "expert", forwardedDate: "2024-03-12", receivedDate: "2024-04-19", witnesses: 2,
+      observations: [{ id: "c1-ev2-o1", date: "2024-04-20", flag: "normal", text: "Both firearms operable; one has a tampered serial number." }] },
+    { id: "c1-ev3", caseId: C1, exhibitNo: "M-3", description: "Seized mobile phones (×3)", reportToObtain: "Device imaging / CFSL cyber report", status: "pending", reportKind: "expert", forwardedDate: "2024-03-15", witnesses: 1 },
+    { id: "c1-ev4", caseId: C1, exhibitNo: "M-4", description: "Vehicle (offending)", reportToObtain: "MVI mechanical report", status: "received", reportKind: "other", forwardedDate: "2024-03-10", receivedDate: "2024-03-15", witnesses: 1 },
     { id: "c1-ev5", caseId: C1, description: "Seizure witnesses", reportToObtain: "Independent panch evidence (statements u/s 180 BNSS)", status: "received", reportKind: "other", witnesses: 4 },
   ],
   processRequests: c1Requests,
   chargesheets: c1Chargesheets,
+  // Comms registers (V4-DELTA N3) — 70029-44810 + IMEI 356938035643809 recur in
+  // Case 2: the Links map draws both as cross-case leads.
+  commsRequests: [
+    { id: "c1-cdr1", caseId: C1, kind: "cdr", ref: "L-4412/24 · 12 Mar 2024", numbers: ["98640-11235", "70029-44810"], receivedCount: 2, expectedDate: "2024-03-25" },
+    { id: "c1-ipdr1", caseId: C1, kind: "ipdr", ref: "L-4419/24 · 14 Mar 2024", numbers: ["98640-11235", "88110-27345", "90011-55678", "70029-44810"], receivedCount: 2, expectedDate: "2026-06-20" },
+    { id: "c1-imei1", caseId: C1, kind: "imei", ref: "L-4420/24 · 14 Mar 2024", numbers: ["356938035643809"], receivedCount: 1, expectedDate: "2024-04-01" },
+  ] satisfies CommsRequestRecord[],
+  towerDumps: [
+    { id: "c1-tw1", caseId: C1, ref: "L-4501/24 · 20 Mar 2024", site: "Fancy Bazar BTS cluster", timeWindow: "08-Mar 18:00–20:00", status: "received", expectedDate: "2024-04-05" },
+  ] satisfies TowerDumpRecord[],
+  // Chain of custody (V4-DELTA N2): M-3 is OUT at CFSL Cyber — open leg flagged.
+  custodyMovements: [
+    { id: "c1-cm1", caseId: C1, exhibitNo: "M-1", evidenceId: "c1-ev1", nature: "Sealed explosive sample", outDate: "2024-03-10", backDate: "2024-04-02", from: "Malkhana", to: "FSL Explosives", purpose: "FSL", sealIntact: true },
+    { id: "c1-cm2", caseId: C1, exhibitNo: "M-1", evidenceId: "c1-ev1", nature: "Sealed explosive sample", outDate: "2024-12-01", backDate: "2024-12-01", from: "Malkhana", to: "NIA Special Court", purpose: "Court exhibit", sealIntact: true },
+    { id: "c1-cm3", caseId: C1, exhibitNo: "M-2", evidenceId: "c1-ev2", nature: "Firearms", outDate: "2024-03-12", backDate: "2024-04-19", from: "Malkhana", to: "Ballistic Lab", purpose: "FSL", sealIntact: true },
+    { id: "c1-cm4", caseId: C1, exhibitNo: "M-3", evidenceId: "c1-ev3", nature: "Electronic devices", outDate: "2026-06-18", backDate: null, from: "Malkhana", to: "CFSL Cyber, Kolkata", purpose: "FSL", sealIntact: true },
+  ] satisfies CustodyMovementRecord[],
 };
 
 // ============================ CASE 2 ============================
@@ -283,12 +312,26 @@ const case2: CaseAggregate = {
   ],
   tasks: [],
   evidence: [
-    { id: "c2-ev1", caseId: C2, description: "FICN notes (₹8.6 L)", reportToObtain: "FSL / RBI note-examination report", status: "pending", reportKind: "expert", forwardedDate: "2026-06-26", witnesses: 3 },
-    { id: "c2-ev2", caseId: C2, description: "Two foreign passports", reportToObtain: "Forgery / questioned-document report", status: "pending", reportKind: "expert", forwardedDate: "2026-06-10", witnesses: 2 },
-    { id: "c2-ev3", caseId: C2, description: "Two mobile phones", reportToObtain: "Device imaging report", status: "pending", reportKind: "expert", forwardedDate: "2026-06-26", witnesses: 1 },
-    { id: "c2-ev4", caseId: C2, description: "Courier consignment note", reportToObtain: "Handwriting comparison", status: "pending", reportKind: "expert", forwardedDate: "2026-06-18", witnesses: 1 },
+    { id: "c2-ev1", caseId: C2, exhibitNo: "E-1", description: "FICN notes (₹8.6 L)", reportToObtain: "FSL / RBI note-examination report", status: "pending", reportKind: "expert", forwardedDate: "2026-06-26", witnesses: 3 },
+    { id: "c2-ev2", caseId: C2, exhibitNo: "E-2", description: "Two foreign passports", reportToObtain: "Forgery / questioned-document report", status: "pending", reportKind: "expert", forwardedDate: "2026-06-10", witnesses: 2 },
+    { id: "c2-ev3", caseId: C2, exhibitNo: "E-3", description: "Two mobile phones", reportToObtain: "Device imaging report", status: "pending", reportKind: "expert", forwardedDate: "2026-06-26", witnesses: 1 },
+    { id: "c2-ev4", caseId: C2, exhibitNo: "E-4", description: "Courier consignment note", reportToObtain: "Handwriting comparison", status: "pending", reportKind: "expert", forwardedDate: "2026-06-18", witnesses: 1 },
   ],
   processRequests: c2Requests,
+  commsRequests: [
+    { id: "c2-cdr1", caseId: C2, kind: "cdr", ref: "L-0771/26 · 06 Jun 2026", numbers: ["70029-44810", "90850-33127", "77380-99012"], receivedCount: 1, expectedDate: "2026-06-22" },
+    { id: "c2-ipdr1", caseId: C2, kind: "ipdr", ref: "L-0774/26 · 07 Jun 2026", numbers: ["90850-33127", "77380-99012"], receivedCount: 0, expectedDate: "2026-06-24" },
+    { id: "c2-imei1", caseId: C2, kind: "imei", ref: "L-0775/26 · 07 Jun 2026", numbers: ["356938035643809", "867530045128834"], receivedCount: 1, expectedDate: "2026-06-26" },
+  ] satisfies CommsRequestRecord[],
+  towerDumps: [
+    { id: "c2-tw1", caseId: C2, ref: "L-0790/26 · 10 Jun 2026", site: "Paltan Bazar BTS", timeWindow: "02-Jun 12:00–14:00", status: "pending", expectedDate: "2026-06-28" },
+  ] satisfies TowerDumpRecord[],
+  // E-2 went to the QD lab with a broken tamper seal (the progress-log incident) —
+  // flagged RED in the ledger and never un-rung; both legs still open (OUT).
+  custodyMovements: [
+    { id: "c2-cm1", caseId: C2, exhibitNo: "E-1", evidenceId: "c2-ev1", nature: "Counterfeit currency", outDate: "2026-06-20", backDate: null, from: "Malkhana", to: "FSL / RBI note-exam", purpose: "FSL", sealIntact: true },
+    { id: "c2-cm2", caseId: C2, exhibitNo: "E-2", evidenceId: "c2-ev2", nature: "Travel documents", outDate: "2026-06-15", backDate: null, from: "Malkhana", to: "QD Lab", purpose: "FSL", sealIntact: false },
+  ] satisfies CustodyMovementRecord[],
 };
 
 /** The two acceptance fixtures, ready to persist as demo data. */

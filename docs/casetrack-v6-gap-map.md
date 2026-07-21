@@ -334,7 +334,29 @@ become a **V4 delta spec** (`docs/REQUIREMENTS-V4-DELTA.md`) citing
 `spec/CaseTrack-preview-v6.html` as source, mirroring how V3 superseded V2.
 Update `docs/legal-rules.md` for any rule-change answers (Q1/Q2).
 
-## 8. Per-module source map (for implementers)
+## 8. V7 addendum — "CaseTrack 4.html" (received 2026-07-21)
+
+Taposh's second drop, archived at
+[`spec/CaseTrack-preview-v7.html`](spec/CaseTrack-preview-v7.html) (his file
+names: "CaseTrack html 3.html" → our v6 archive; "CaseTrack 4.html" → v7; the
+internal banner still reads "Preview · V6" — content supersedes). Full diff vs
+v6 is 329 lines, all in the app module; nothing else changed. **Every item
+adopted** per the standing "prefer Taposh" directive
+([REQUIREMENTS-V4-DELTA.md](REQUIREMENTS-V4-DELTA.md) §1.1):
+
+| # | V7 change | Signal |
+|---|---|---|
+| V7-1 | `TODAY` is now the **live system date** (was frozen 2026-06-26) | The prototype graduated from mock to working-tool candidate — he intends to *use* this shape |
+| V7-2 | **H1.1 Original FIR** — free-text sub-heading under Case number | Re-registered/transferred dockets (PS FIR → CID/NIA case) need the parent FIR on record |
+| V7-3 | **H5.1 Name of CIO** — dropdown fed by a master list | Cases carry their Case Investigating Officer |
+| V7-4 | **H5.2 Name & address of complainant** | Docket-of-record field |
+| V7-5 | **H5.3 Name of the trial court** | Docket-of-record field |
+| V7-6 | New top-level **CIO view**: master list of officers `{name, rank}`, re-orderable, deletable; feeds every case's H5.1; vault payload became `{cases, cioList}` (backward-compat load kept) | First **app-level reference collection** — reference data is deletable, unlike case records |
+| V7-7 | **H7 rebuilt as a status-count table**: Total · Arrested (PC+JC) · Absconder · Killed · Charge-sheeted · Under investigation · Convicted · Acquitted · Approver · Dropped | The standard case-summary breakdown supervisors ask for — computed, never typed |
+| V7-8 | Accused add/edit rows gain an **explicit arrest-date input** ("enter first"; prompt only as fallback) | Confirms N6 per-accused arrest dates as first-class, visible fields |
+| V7-9 | Delete guard tightened: only **sample** cases deletable; wording "Cases you have entered are edit-only and cannot be deleted" | Q4 edit-only policy re-affirmed, now scoped as sample-vs-entered |
+
+## 9. Per-module source map (for implementers)
 
 Everything below cites the archived file `spec/CaseTrack-preview-v6.html`; the
 app module starts at the `__def("app", …)` block (~line 17172 of the original).

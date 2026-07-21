@@ -25,6 +25,19 @@
 | Q7 | Appeal-window default: flat 90d (V6) vs forum-accurate 30/60/90 | **Exception — keep forum-accurate** (see §5); V6's editable per-accused `appealBy` field adopted, 90d used only when the forum is unknown (labelled "verify") |
 | Q8 | Cat I–V semantics | **Manual officer-set facet**, alongside (not replacing) `CaseStatus` |
 
+### 1.1 V7 additions ("CaseTrack 4.html", 2026-07-21 — all adopted)
+
+Second drop, archived at [`spec/CaseTrack-preview-v7.html`](spec/CaseTrack-preview-v7.html);
+itemized in [casetrack-v6-gap-map.md](casetrack-v6-gap-map.md) §8. Adds, on top
+of everything above: **H1.1 Original FIR** · **H5.1 Name of CIO** (dropdown from
+a new app-level **CIO master list** {name, rank}) · **H5.2 complainant name &
+address** · **H5.3 trial-court name** · **H7 as a computed status-count table**
+(Total / Arrested PC+JC / Absconder / Killed / Charge-sheeted / Under
+investigation / Convicted / Acquitted / Approver / Dropped) · explicit
+arrest-date inputs on accused rows · delete guard scoped to sample-vs-entered
+cases. His briefing note doesn't yet print the new fields — ours will (prototype
+lag, not a decision).
+
 ## 2. Rules-engine changes
 
 Changes to existing rules (golden tests update with each):
@@ -62,6 +75,9 @@ New domain checks (not deadlines — integrity panel, dashboard + case file):
 **CaseRecord**
 
 - `category: "I"|"II"|"III"|"IV"|"V"` (default "I") — officer-set supervision facet.
+- V7 docket fields: `originalFir?`, `cioId?` (FK → cio list), `complainant?`,
+  `trialCourtName?` — rendered as sub-headings H1.1 / H5.1 / H5.2 / H5.3 and
+  included in the briefing note.
 - Split FR-I from court filing: new `frISubmittedDate` (internal submission up the
   chain — DG clock anchor); `chargesheetFiledDate` becomes **derived** = earliest
   chargesheet-register date.
@@ -93,6 +109,7 @@ New domain checks (not deadlines — integrity panel, dashboard + case file):
 | `evidence_observation` | evidenceId, date, flag (high/normal), text |
 | `progress_entry` (H8) | date, tag (General/Sections/Arrest/Evidence/Court/FSL/Custody/Sanction/Intel), note, optional `routedTo` |
 | `plan_entry` (H13) | date, note |
+| `cio` (app-level) | name, rank, sortOrder — master CIO list feeding every case's H5.1; reference data, **deletable** (unlike case records) |
 
 **EvidenceRecord** — add `exhibitNo` (M-1/D-1 style); heading-8/9 free-text fields
 (`investigationProgress`, `planOfAction`) migrate into one seed `progress_entry` /
@@ -180,7 +197,8 @@ current-month-only PR check.
 1. **T1 — spines** (schema migration + low-risk extensions): chargesheet
    register · per-accused arrest/bail · conviction + appeal (Q3/Q7) · integrity
    panel · priority cap · reference refresh · search upgrades · rule-parameter
-   changes (7d, DG anchor, 15d lead, stale 30).
+   changes (7d, DG anchor, 15d lead, stale 30) · V7 docket fields (H1.1,
+   H5.1–5.3) + CIO master list + H7 status-count table.
 2. **T2 — new modules**: comms registers → Links map · custody ledger · report
    observations (+ briefing sections) · FR→MHA pipeline stepper.
 3. **T3 — views & polish**: calendar view · H8/H13 logs + routing · dashboard

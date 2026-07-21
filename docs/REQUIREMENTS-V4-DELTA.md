@@ -200,10 +200,31 @@ current-month-only PR check.
 > T1 screens. T2: comms registers (CDR/IPDR/IMEI/tower) + pendency rules, the
 > cross-case **Links** map, custody movement ledger, report observations (High →
 > briefing note), FR→MHA pipeline stepper, sanctions[] list panel, briefing note
-> V7 sub-headings + registers; `window.confirm` eliminated app-wide. 276 tests +
-> typecheck green, all flows browser-verified. **T3 remains**: calendar view,
-> H8/H13 dated logs + routing, dashboard heat tiles, .doc export, full edit-only
-> sweep, witness re-rank/examined, documents-register rework, dark mode.
+> V7 sub-headings + registers; `window.confirm` eliminated app-wide.
+>
+> **2026-07-21: 4-agent independent review + remediation** (commit `26d12a3`).
+> Fixed: 3 criticals (cross-case edit-buffer bleed; stale InvestigationPanel
+> buffer wiping pipeline dates; partial chargesheet closing the FR clock
+> case-wide — coverage is now per-accused with FR pills on the roster) + 8
+> majors (one-time hydration migrations so cleared dates stay cleared, legacy
+> filing date → register row, editable register rows, per-accused
+> production-24h, appeal double-count, custody double-fire, demo-only delete
+> guards + insert-only seed, light-theme track pills, commit-on-blur inputs) +
+> minors. 288 tests + typecheck green; criticals re-verified live.
+>
+> **Deferred to T3 (from the review):** one-tap NEXT-DATE rollover + per-case
+> integrity card; search result grouping/highlighting + in-case search; DORMANT
+> in the integrity card; `untouchedDays` settings UI.
+> **Open legal question for the officer (Q9):** day-90 counting convention —
+> `uapa-pp-report-window` treats a report filed ON day 90 as late (Wadhawan:
+> remand day counts) while fr1's statutory note shows anchor+90 as the file-by
+> date; the last SAFE day is arguably anchor+89. One-line display change once
+> confirmed. The 75-vs-150 SP-remarks line (statutory-correct 90→180 gating vs
+> the officer's flat 150) is recorded as intentional.
+>
+> **T3 remains**: calendar view, H8/H13 dated logs + routing, dashboard heat
+> tiles, .doc export, full edit-only sweep, witness re-rank/examined,
+> documents-register rework, dark mode + the deferred review items above.
 
 1. **T1 — spines** (schema migration + low-risk extensions): chargesheet
    register · per-accused arrest/bail · conviction + appeal (Q3/Q7) · integrity

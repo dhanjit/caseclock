@@ -78,8 +78,6 @@ describe("searchCases — the no-document-content guarantee", () => {
             case: {
               ...a.case,
               brief: `${a.case.brief ?? ""} ${SENT}`,
-              investigationProgress: `${a.case.investigationProgress ?? ""} ${SENT}`,
-              planOfAction: `${a.case.planOfAction ?? ""} ${SENT}`,
               trialStatus: `${a.case.trialStatus ?? ""} ${SENT}`,
             },
           }

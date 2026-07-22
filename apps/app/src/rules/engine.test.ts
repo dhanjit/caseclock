@@ -110,13 +110,6 @@ describe("officer investigation engine (§4.1) — arrest-anchored custody/FR", 
     expect(mha.note).toMatch(/blocked|only after MHA/i);
   });
 
-  it("legacy dgOrderDate still satisfies the DG step and anchors IR-to-MHA", () => {
-    const c = mk({ frISubmittedDate: "2025-08-01", dgOrderDate: "2025-08-04" });
-    const e = run(c, "2025-08-06");
-    expect(find(e, "fr-dg-order")!.state).toBe("done");
-    expect(find(e, "fr-ir-mha")!.dueAt).toBe(addDays("2025-08-04", 7));
-  });
-
   it("SP remarks is UAPA-only, riding the 150-day line from the earliest arrest", () => {
     const uapa = mk({ uapaFlag: true, uapaExtensionGranted: true, arrestDate: "2025-05-01", frISubmittedDate: "2025-08-01" });
     const sp = find(run(uapa, "2025-08-08"), "fr-sp-remarks")!;
@@ -513,7 +506,7 @@ describe("review fixes — production-24h fan-out, appeal ownership, custody fal
     const c = mk({ uapaFlag: true, arrestDate: "2026-01-01", custodyStatus: "in_custody", uapaExtensionGranted: true });
     const pp = run(c, "2026-07-21").find((d) => d.ruleId === "uapa-pp-report-window")!;
     expect(pp.state).toBe("done");
-    expect(pp.note).toMatch(/legacy flag/);
+    expect(pp.note).toMatch(/Extension recorded as granted/);
   });
 
   it("DG/SP steps go moot (no eternal hard flag) once the chargesheet is on file without them", () => {

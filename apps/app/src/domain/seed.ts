@@ -115,11 +115,7 @@ const c1Case: CaseRecord = {
   occurrenceDate: "2024-03-08",
   brief:
     "On a specific input, a joint team intercepted a vehicle near Fancy Bazar and recovered an assembled IED (~2.5 kg RDX), two pistols and ammunition. Three persons were arrested at the spot; interrogation revealed linkage to a proscribed organisation [ULFA-I] and a wider conspiracy to target a public gathering. Chargesheet filed against 4 accused; one absconder declared PO; investigation kept open qua one accused.",
-  investigationProgress:
-    "Scene of crime examined; IED defused by BDDS; exhibits seized under seizure memo dated 08 Mar 2024. Samples forwarded to FSL (explosives) and CFSL; arms forwarded to ballistic expert. UAPA sanction obtained; chargesheet filed 04 Sep 2024. Supplementary investigation continuing qua A-5; LOC and Interpol RCN sought for absconder A-4.",
   trialStatus: "Charges framed 12 Dec 2024 before NIA Special Court; prosecution evidence stage — 6 of 18 PWs examined.",
-  planOfAction:
-    "File counter-affidavit in SLP (bail) before SC; pursue pending device-imaging report (overdue) — reminder to CFSL; execute LOC/RCN follow-up for absconder A-4; complete supplementary investigation qua A-5.",
   punishmentBand: "10plus",
   uapaFlag: true,
   sexualOffenceInScope: false,
@@ -127,7 +123,6 @@ const c1Case: CaseRecord = {
   arrestDate: "2024-03-09",
   firstRemandDate: "2024-03-09",
   custodyStatus: "in_custody",
-  chargesheetFiledDate: "2024-09-04", // derived from the register on hydration
   // FR → MHA pipeline (V4-DELTA §2) — fully traversed before the chargesheet;
   // MHA sanction 28 Aug 2024 matches the sanction request in the tracker.
   frISubmittedDate: "2024-08-10",
@@ -138,8 +133,7 @@ const c1Case: CaseRecord = {
   firstPrFiledDate: "2024-03-20",
   // Every Court-PR month back-filled except the current one → Jun-2026 Court PR shows overdue.
   prFiledMonths: monthsBetween("2024-03", "2026-05"),
-  sanctionStatutory: "obtained",
-  sanctionDg: "na",
+  sanctions: [{ id: "c1-sn1", kind: "Statutory (UAPA s.45)", state: "obtained", date: "2024-08-28" }],
   sanctionNote: "Statutory (UAPA s.45) obtained 28 Aug 2024; DG sanction not required for this case.",
   place: { label: "Fancy Bazar, Guwahati", lat: 26.1869, lng: 91.7407 },
   status: "trial",
@@ -277,11 +271,7 @@ const c2Case: CaseRecord = {
   occurrenceDate: "2026-06-02",
   brief:
     "Acting on intelligence, a team apprehended three individuals at a hotel in Paltan Bazar and recovered high-quality FICN of face value ₹8.6 lakh, two foreign passports and a courier consignment note. Preliminary inquiry indicates the trio are foreign nationals who entered on lapsed visas and are linked to a trans-border counterfeit network. All three were arrested and remanded; investigation is at an early, time-critical stage with multiple statutory clocks running.",
-  investigationProgress:
-    "FICN seized & counted before magistrate; sample notes forwarded to FSL/RBI note-examination. Foreigner status verification with FRRO; reference to MEA initiated; passports sent for forgery examination. First PR filed within 15 days; monthly PR cycle running. MLA request being prepared; device imaging of two phones forwarded.",
   trialStatus: "Pre-chargesheet — investigation stage; no charges framed. Custody & FR clocks are the governing deadlines.",
-  planOfAction:
-    "Ensure timely production of A-1 on 27 Jun (custody ends) — reminder fires 26 Jun; oppose A-2 bail on 02 Jul; chase overdue passport forgery report; complete FRRO/MEA verification; finalise & dispatch MLA request; work to buffered FR-I target.",
   punishmentBand: "10plus",
   // Decision #6: UAPA s.15 (FICN) is charged → uapaFlag set so custody lands on the
   // UAPA 150/90 track, not the scheduled 60/45 default.
@@ -294,8 +284,10 @@ const c2Case: CaseRecord = {
   // custody end lives on the accused row (c2-a1) per V4-DELTA §2 — no case-level dup
   firstPrFiledDate: "2026-06-15",
   prFiledMonths: ["2026-06"],
-  sanctionStatutory: "pending",
-  sanctionDg: "pending",
+  sanctions: [
+    { id: "c2-sn1", kind: "Statutory (UAPA s.45)", state: "pending", date: null },
+    { id: "c2-sn2", kind: "DG sanction", state: "pending", date: null },
+  ],
   sanctionNote: "Statutory (UAPA s.45, if FICN s.15 retained) required & pending; DG sanction required & pending.",
   place: { label: "Paltan Bazar, Guwahati", lat: 26.1833, lng: 91.7538 },
   status: "custody",

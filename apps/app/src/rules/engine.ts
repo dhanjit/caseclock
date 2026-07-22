@@ -248,14 +248,14 @@ export const RULE_REGISTRY: Rule[] = [
     leadOffsets: [3, 1],
     applies: (c) => !!c.frISubmittedDate,
     compute: ({ c, persons, chargesheets, today }) => {
-      const done = !!(c.dgApprovedDate || c.dgOrderDate);
+      const done = !!c.dgApprovedDate;
       // Chargesheet already on file without a DG date → moot, don't nag forever.
       if (!frPipelineOpen(c, persons, chargesheets) && !done) return null;
       const due = addDays(c.frISubmittedDate!, 7);
       return {
         type: "DG approval of FR-I (≤7 days)",
         dueAt: due,
-        state: stateVs(due, today, !!(c.dgApprovedDate || c.dgOrderDate)),
+        state: stateVs(due, today, !!c.dgApprovedDate),
         owes: "self",
         note: "Hard flag — escalate if DG approval is not recorded within 7 days of FR-I submission.",
       };
@@ -268,12 +268,12 @@ export const RULE_REGISTRY: Rule[] = [
     severity: "statutory-critical",
     track: "investigation",
     leadOffsets: [3, 1],
-    applies: (c) => !!(c.dgApprovedDate || c.dgOrderDate),
+    applies: (c) => !!c.dgApprovedDate,
     compute: ({ c, today }) => {
       // Chargesheet already on file without this step → the pipeline is moot (V6
       // closes it on csFiled); a recorded IR still shows as a done row.
       if (c.chargesheetFiledDate && !c.irForMhaDate) return null;
-      const dg = (c.dgApprovedDate ?? c.dgOrderDate)!;
+      const dg = c.dgApprovedDate!;
       const due = addDays(dg, 7);
       return {
         type: "IR for MHA sanction (≤7 days of DG approval)",
@@ -401,14 +401,14 @@ export const RULE_REGISTRY: Rule[] = [
       // Q9 / Wadhawan: the remand day counts — day 90 of the period falls on
       // anchor + 89, the last safe day to act.
       const lastSafe = addDays(anchor, 89);
-      // Legacy vaults recorded the extension only as a boolean — honour it.
+      // The extension may be recorded as the boolean alone — honour it.
       if (c.uapaExtensionGranted && !c.uapaPpReportFiledDate && !c.custodyExtFiledDate) {
         return {
           type: "UAPA 43-D(2) PP extension report",
           dueAt: lastSafe,
           state: "done",
           owes: "PP",
-          note: "Extension recorded as granted (legacy flag) — file the PP-report date when known.",
+          note: "Extension recorded as granted — file the PP-report date when known.",
         };
       }
       // Either date evidences the extension step: the PP report or the officer's

@@ -384,7 +384,7 @@ export function CaseFile({
           {onSaveProgress ? (
             <ProgressLogPanel agg={agg} onSaveProgress={onSaveProgress} onSaveCase={onSaveCase} onSaveHearings={onSaveHearings} />
           ) : (
-            text(c.investigationProgress)
+            dash
           )}
         </Heading>
         <Heading n={9} title="Evidences collected">
@@ -441,7 +441,7 @@ export function CaseFile({
           )}
         </Heading>
         <Heading n={13} title="Plan of action — dated log">
-          {onSavePlan ? <PlanLogPanel agg={agg} onSavePlan={onSavePlan} /> : text(c.planOfAction)}
+          {onSavePlan ? <PlanLogPanel agg={agg} onSavePlan={onSavePlan} /> : dash}
         </Heading>
       </div>
       <div className="mt-3 flex justify-end">

@@ -164,9 +164,9 @@ export function searchCases(
         c.identity,
         c.sectionsOfLaw,
         c.brief,
-        c.investigationProgress,
         c.trialStatus,
-        c.planOfAction,
+        ...(agg.progressLog ?? []).map((e) => e.note),
+        ...(agg.planLog ?? []).map((e) => e.note),
         ...accused.map((p) => p.name),
         ...agg.hearings.map((h) => h.court),
       ]

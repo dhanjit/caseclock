@@ -41,7 +41,7 @@ export function InvestigationPanel({
   const [frI, setFrI] = useState(c.frISubmittedDate ?? "");
   const [frII, setFrII] = useState(c.frIIFiledDate ?? "");
   const [spRemarks, setSpRemarks] = useState(c.spRemarksDate ?? "");
-  const [dgApproved, setDgApproved] = useState(c.dgApprovedDate ?? c.dgOrderDate ?? "");
+  const [dgApproved, setDgApproved] = useState(c.dgApprovedDate ?? "");
   const [irMha, setIrMha] = useState(c.irForMhaDate ?? "");
   const [mhaSanction, setMhaSanction] = useState(c.mhaSanctionDate ?? "");
   const [custodyExt, setCustodyExt] = useState(c.custodyExtFiledDate ?? "");
@@ -67,7 +67,7 @@ export function InvestigationPanel({
     setFrI(c.frISubmittedDate ?? "");
     setFrII(c.frIIFiledDate ?? "");
     setSpRemarks(c.spRemarksDate ?? "");
-    setDgApproved(c.dgApprovedDate ?? c.dgOrderDate ?? "");
+    setDgApproved(c.dgApprovedDate ?? "");
     setIrMha(c.irForMhaDate ?? "");
     setMhaSanction(c.mhaSanctionDate ?? "");
     setCustodyExt(c.custodyExtFiledDate ?? "");
@@ -237,7 +237,7 @@ export function InvestigationPanel({
         {isUapa && <Row k="UAPA PP-report" v={c.uapaPpReportFiledDate ? fmtDate(c.uapaPpReportFiledDate) : "pending (≤ day 90)"} />}
         {isUapa && <Row k="Custody ext. 90→180" v={c.custodyExtFiledDate ? `filed ${fmtDate(c.custodyExtFiledDate)}` : "not filed (day-75 reminder)"} />}
         <Row k="FR-I submitted" v={fmtDate(c.frISubmittedDate)} />
-        <Row k="DG approval" v={fmtDate(c.dgApprovedDate ?? c.dgOrderDate)} />
+        <Row k="DG approval" v={fmtDate(c.dgApprovedDate)} />
         <Row k="IR for MHA" v={fmtDate(c.irForMhaDate)} />
         <Row k="MHA sanction" v={c.mhaSanctionDate ? fmtDate(c.mhaSanctionDate) : c.irForMhaDate ? "pending — chargesheet blocked" : "—"} />
         {isUapa && <Row k="FR-II" v={fmtDate(c.frIIFiledDate)} />}

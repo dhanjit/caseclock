@@ -6,12 +6,13 @@
 
 import { describe, it, expect } from "vitest";
 import { buildBriefing, type BriefingNote } from "./briefing";
+import { hydrateAggregate } from "./repository";
 import { sampleAggregates } from "./seed";
 import type { CaseAggregate } from "./repository";
 import type { CaseRecord } from "./types";
 
 const TODAY = "2026-06-27"; // ~ the fixtures' 26 Jun 2026 reference date
-const cases = sampleAggregates();
+const cases = sampleAggregates().map(hydrateAggregate);
 const byId = (id: string) => cases.find((a) => a.case.id === id)!;
 
 /** The 13 fixed headings + V7 docket sub-headings in CaseFile.tsx order. */

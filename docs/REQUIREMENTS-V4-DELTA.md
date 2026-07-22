@@ -176,7 +176,20 @@ Also not ported (implementation artifacts, not requirements): `prompt()`/`alert(
 flows, frozen `TODAY`, regex-parsed custody end dates, single-write persistence,
 current-month-only PR check.
 
-## 6. Migration notes
+## 6. Migration notes — OBSOLETE (prototype mode)
+
+> **2026-07-22 (Dhanjit): "No migration hacks — we are still prototype
+> designing."** All legacy-compat machinery was removed (the `legacyMigrated`
+> one-time copies, dgOrderDate/sanction-field/arrest copy-down, free-text →
+> log seeding, legacy chargesheet-date → register synthesis, and the
+> deprecated fields themselves). The current schema is the only schema; old
+> prototype vaults are simply re-seeded ("Clear & start fresh" → "Load sample
+> cases"). The one derivation that stays is `chargesheetFiledDate` = earliest
+> register row — that's the data model, not compat. Re-introduce a real
+> migration strategy only when there are production vaults to protect.
+> The notes below are kept for the record.
+
+### Original notes (historical)
 
 - Vault schema migration (additive tables + column adds + two field migrations:
   sanctions → list; H8/H13 text → seed log entries). Follow `db/migrate.ts`

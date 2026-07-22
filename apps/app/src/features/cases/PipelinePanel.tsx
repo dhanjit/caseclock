@@ -34,7 +34,7 @@ export function PipelinePanel({
   const anchor = earliestArrest(c, agg.persons);
   const isUapa = custodyLimits(c).caseType === "uapa";
   const csDone = chargesheetFiled(agg);
-  const dg = c.dgApprovedDate ?? c.dgOrderDate;
+  const dg = c.dgApprovedDate;
 
   if (!anchor) {
     return (

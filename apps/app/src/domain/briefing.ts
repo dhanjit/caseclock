@@ -126,17 +126,17 @@ function textLines(v: string | null | undefined): string[] {
   return v && v.trim() ? [v] : [DASH];
 }
 
-/** Heading 8/13 (T3): dated log entries, newest first; legacy free-text fallback. */
+/** Heading 8/13 (T3): dated log entries, newest first. */
 function progressLines(agg: CaseAggregate): string[] {
   const log = agg.progressLog ?? [];
-  if (log.length === 0) return textLines(agg.case.investigationProgress);
+  if (log.length === 0) return [DASH];
   return [...log]
     .sort((a, b) => b.date.localeCompare(a.date))
     .map((e) => `[${fmtDate(e.date)}${e.tag !== "General" ? ` · ${e.tag}` : ""}] ${e.note}`);
 }
 function planLines(agg: CaseAggregate): string[] {
   const log = agg.planLog ?? [];
-  if (log.length === 0) return textLines(agg.case.planOfAction);
+  if (log.length === 0) return [DASH];
   return [...log].sort((a, b) => b.date.localeCompare(a.date)).map((e) => `[${fmtDate(e.date)}] ${e.note}`);
 }
 
@@ -163,7 +163,9 @@ export function buildBriefing(agg: CaseAggregate, today: ISODate, officers: CioR
   // Banned-orgs footer (V6 prints "BANNED ORGS FLAGGED: ..."): watchlist names
   // that actually appear in this case's text/persons.
   const corpus = [
-    c.identity, c.sectionsOfLaw, c.brief, c.investigationProgress, c.trialStatus, c.planOfAction,
+    c.identity, c.sectionsOfLaw, c.brief, c.trialStatus,
+    ...(agg.progressLog ?? []).map((e) => e.note),
+    ...(agg.planLog ?? []).map((e) => e.note),
     ...agg.persons.map((p) => p.name),
   ].filter(Boolean).join(" \n ").toLowerCase();
   const flaggedWatchlist = watchlist.filter((w) => w.trim() && corpus.includes(w.trim().toLowerCase()));

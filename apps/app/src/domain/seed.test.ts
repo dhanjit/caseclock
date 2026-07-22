@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect } from "vitest";
+import { hydrateAggregate } from "./repository";
 import { sampleAggregates } from "./seed";
 import { computeDeadlines } from "@/rules/engine";
 import { buildAgenda } from "@/rules/agenda";
@@ -12,7 +13,7 @@ import { addDays } from "@/rules/dates";
 import { DEFAULT_SETTINGS, uapaSectionWithoutFlag, type DeadlineEvent } from "./types";
 
 const TODAY = "2026-06-27"; // ~ the fixtures' 26 Jun 2026 reference date
-const cases = sampleAggregates();
+const cases = sampleAggregates().map(hydrateAggregate);
 const byId = (id: string) => cases.find((a) => a.case.id === id)!;
 
 function deadlines(id: string): DeadlineEvent[] {

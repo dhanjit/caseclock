@@ -314,9 +314,9 @@ export interface CaseRecord {
   complainant?: string; // H5.2 — name & address of complainant
   trialCourtName?: string; // H5.3 — name of the trial court
   brief?: string; // §3.6 Brief of the case
-  investigationProgress?: string; // §3.8 Progress of investigation
   trialStatus?: string; // §3.10 Status of trial
-  planOfAction?: string; // §3.13 Plan of action
+  // §3.8 Progress of investigation + §3.13 Plan of action live as DATED LOGS on
+  // the aggregate (progressLog / planLog) — not free-text fields.
 
   // Offence classification
   punishmentBand: PunishmentBand;
@@ -348,9 +348,7 @@ export interface CaseRecord {
   frIIFiledDate?: ISODate | null;
   spRemarksDate?: ISODate | null; // UAPA-only step (due on the 150-day line)
   custodyExtFiledDate?: ISODate | null; // UAPA custody-extension 90→180 filed (day-75 reminder)
-  dgApprovedDate?: ISODate | null; // absorbs legacy dgOrderDate (hydration maps it)
-  /** @deprecated superseded by dgApprovedDate — kept so old vault JSON still parses. */
-  dgOrderDate?: ISODate | null;
+  dgApprovedDate?: ISODate | null;
   irForMhaDate?: ISODate | null;
   mhaSanctionDate?: ISODate | null;
   // Progress Reports
@@ -382,13 +380,8 @@ export interface CaseRecord {
   deathSentence?: boolean;
   appealDecided?: boolean; // appeal filed or decided not to appeal
 
-  // Sanctions (§5) — open list per V4-DELTA §3; the two legacy fixed fields are
-  // migrated into `sanctions` on hydration and kept only for old vault JSON.
+  // Sanctions (§5) — open list per V4-DELTA §3.
   sanctions?: SanctionItem[];
-  /** @deprecated migrated into `sanctions` on hydration. */
-  sanctionStatutory?: SanctionStatus;
-  /** @deprecated migrated into `sanctions` on hydration. */
-  sanctionDg?: SanctionStatus;
   sanctionNote?: string;
   place?: PlaceOfOccurrence;
 
@@ -396,11 +389,6 @@ export interface CaseRecord {
   status: CaseStatus;
   category?: CaseCategory; // officer-set Cat I–V facet (default "I")
   demo?: boolean; // sample/demo case — the only kind that may be deleted (V7-9)
-  /** One-time legacy migrations (dgOrderDate copy, sanction-field lift, arrest
-   * copy-down, chargesheet-date → register row) have run. Without this stamp the
-   * copies re-ran on every hydrate, silently resurrecting values the officer had
-   * deliberately cleared (review finding). */
-  legacyMigrated?: boolean;
   lastTouchedAt?: ISODate | null;
   nextReviewDate?: ISODate | null;
   // Fluid user priority (REQUIREMENTS §1) — the officer flags up to ~10 cases that

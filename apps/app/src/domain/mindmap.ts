@@ -114,7 +114,7 @@ export function buildMindMap(agg: CaseAggregate, watchlistNames: string[] = []):
     { title: "Date of registration", sublabel: c.firDate },
     { title: "Brief", sublabel: short(c.brief, 28) },
     { title: "No. of accused", sublabel: String(accused.length) },
-    { title: "Progress", sublabel: short(c.investigationProgress, 28) },
+    { title: "Progress", sublabel: short((agg.progressLog ?? [])[0]?.note, 28) },
     {
       title: "Evidences",
       sublabel: `${evidence.length} item(s)`,
@@ -166,7 +166,7 @@ export function buildMindMap(agg: CaseAggregate, watchlistNames: string[] = []):
         };
       }),
     },
-    { title: "Plan of action", sublabel: short(c.planOfAction, 28) },
+    { title: "Plan of action", sublabel: short((agg.planLog ?? [])[0]?.note, 28) },
   ];
 
   const n = branches.length;

@@ -94,7 +94,7 @@ export function Sidebar() {
                 key={a.case.id}
                 onClick={() => go({ kind: "case", id: a.case.id })}
                 title={caseLabel(a.case)}
-                className={`flex w-full items-center gap-1.5 truncate rounded px-2.5 py-1.5 text-left text-xs ${activeCaseId === a.case.id ? "bg-chrome-2 text-chrome-ink" : "text-chrome-ink/70 hover:bg-chrome-2 hover:text-chrome-ink"}`}
+                className={`flex w-full items-center gap-1.5 truncate rounded border-l-2 px-2.5 py-1.5 text-left text-xs ${activeCaseId === a.case.id ? "border-brass bg-chrome-2 text-chrome-ink" : "border-transparent text-chrome-ink/70 hover:bg-chrome-2 hover:text-chrome-ink"}`}
               >
                 {a.case.priority && <span className="shrink-0 text-chrome-dim">★</span>}
                 <span className="truncate">{caseLabel(a.case)}</span>

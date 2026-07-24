@@ -89,8 +89,20 @@ export default function App() {
     <div className="flex h-full">
       <Sidebar />
       <main className="min-w-0 flex-1 overflow-y-auto overscroll-none">
-        <Shell />
+        <FadedShell />
       </main>
+    </div>
+  );
+}
+
+/** Remount + fade the active view on navigation (design-direction §3 Motion).
+ *  Grid wrapper keeps the min-h-full chain intact for short views. */
+function FadedShell() {
+  const view = useNav((s) => s.view);
+  const key = `${view.kind}:${"id" in view ? view.id : ""}`;
+  return (
+    <div key={key} className="view-fade grid min-h-full">
+      <Shell />
     </div>
   );
 }

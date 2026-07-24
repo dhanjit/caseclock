@@ -9,7 +9,7 @@ import { estimateStrength, MIN_PASSPHRASE_LENGTH } from "@/lib/passphrase";
 
 function ClockGlyph() {
   return (
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <circle cx="12" cy="12" r="9" />
       <path d="M12 7v5l3 2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
@@ -80,16 +80,17 @@ export function LockScreen() {
   return (
     <div className="mx-auto grid min-h-full max-w-md place-items-center px-6">
       <form onSubmit={submit} className="w-full">
-        <div className="mb-6 flex items-center gap-3">
-          <div className="grid h-12 w-12 place-items-center rounded-2xl bg-court/15 text-court">
+        {/* Round brass monogram over the wordmark — the ledger cover page
+            (design-direction §1/§2 "monogram lock screen"). */}
+        <div className="mb-7 flex flex-col items-center text-center">
+          <div className="grid h-16 w-16 place-items-center rounded-full border-2 border-brass/70 text-brass">
             <ClockGlyph />
           </div>
-          <div>
-            <h1 className="text-xl font-semibold leading-tight">CaseClock</h1>
-            <p className="text-sm text-ink-dim">
-              {creating ? "Create your encrypted vault" : "Unlock your vault"}
-            </p>
-          </div>
+          <h1 className="mt-3 text-2xl leading-tight font-semibold">CaseClock</h1>
+          <p className="eyebrow mt-1.5">Confidential · Offline vault</p>
+          <p className="mt-2 text-sm text-ink-dim">
+            {creating ? "Create your encrypted vault" : "Unlock your vault"}
+          </p>
         </div>
 
         <label className="mb-1 block text-xs font-medium text-ink-dim">Passphrase</label>
@@ -136,7 +137,7 @@ export function LockScreen() {
         <button
           type="submit"
           disabled={!canSubmit}
-          className="mt-5 w-full rounded-xl bg-court px-4 py-2.5 font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          className="mt-5 w-full rounded-xl bg-ink px-4 py-2.5 font-medium text-surface transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {busy ? (creating ? "Creating vault…" : "Unlocking…") : creating ? "Create vault" : "Unlock"}
         </button>

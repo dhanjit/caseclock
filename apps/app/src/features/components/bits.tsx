@@ -20,9 +20,11 @@ export function Section({
 }) {
   return (
     <section className={`rounded-2xl border border-line bg-surface-2 p-4 ${className}`}>
-      <header className="mb-3 flex items-baseline justify-between">
-        <h2 className="text-sm font-semibold tracking-wide text-ink-dim uppercase">{title}</h2>
-        {hint ? <span className="text-xs text-soft">{hint}</span> : null}
+      {/* Ledger section bar (design-direction §1): mono uppercase title over a
+          brass rule — the officer's signature heading treatment. */}
+      <header className="mb-3 flex items-baseline justify-between gap-3 border-b-2 border-brass/40 pb-1.5">
+        <h2 className="font-mono text-[11.5px] font-semibold tracking-[0.14em] text-ink uppercase">{title}</h2>
+        {hint ? <span className="text-right text-xs text-soft">{hint}</span> : null}
       </header>
       {children}
     </section>

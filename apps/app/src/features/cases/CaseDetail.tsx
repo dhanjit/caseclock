@@ -28,6 +28,8 @@ import { fmtDate, relativeDays, severityTone, toneText } from "@/lib/format";
 import { Section, Field, Dot } from "@/features/components/bits";
 import { Highlighted } from "@/features/components/Highlighted";
 import { TopBar, btn } from "@/features/components/TopBar";
+import { MoreMenu } from "@/features/components/Menu";
+import { CaseToc, TOC_SCROLL_MARGIN, type TocItem } from "./CaseToc";
 import { CaseFile } from "./CaseFile";
 import { AccusedPanel } from "./AccusedPanel";
 import { WitnessPanel } from "./WitnessPanel";
@@ -49,6 +51,29 @@ import { BriefingNote } from "./BriefingNote";
 import { buildCaseIcs } from "@/domain/ics";
 
 const input = "w-full rounded-xl border border-line bg-surface-2 px-3 py-2 text-sm text-ink outline-none focus:border-court";
+
+/** Jump targets for the sticky section rail — one per panel, in page order. */
+const TOC_ITEMS: TocItem[] = [
+  { id: "sec-clocks", label: "Clocks" },
+  { id: "sec-file", label: "Case file" },
+  { id: "sec-accused", label: "Accused" },
+  { id: "sec-witnesses", label: "PW" },
+  { id: "sec-investigation", label: "Investigation" },
+  { id: "sec-pipeline", label: "FR·MHA" },
+  { id: "sec-trial", label: "Trial" },
+  { id: "sec-hearings", label: "Hearings" },
+  { id: "sec-evidence", label: "Evidence" },
+  { id: "sec-custody", label: "Custody" },
+  { id: "sec-comms", label: "Comms" },
+  { id: "sec-requests", label: "Requests" },
+  { id: "sec-sanctions", label: "Sanctions" },
+  { id: "sec-place", label: "Place" },
+  { id: "sec-gallery", label: "Gallery" },
+  { id: "sec-documents", label: "Documents" },
+  { id: "sec-reference", label: "Reference" },
+  { id: "sec-timeline", label: "Timeline" },
+  { id: "sec-note", label: "Log note" },
+];
 
 /** Trigger a client-side file download (reused for the per-case .ics export). */
 function downloadFile(filename: string, content: string, mime: string) {
@@ -242,15 +267,13 @@ export function CaseDetail({ id }: { id: string }) {
             <button onClick={() => setPrinting(true)} title="Printable A4 briefing note" className={btn("ghost")}>
               Briefing note
             </button>
-            <button onClick={exportCaseIcs} title="Export this case's deadlines as .ics" className={btn("ghost")}>
-              Export .ics
-            </button>
-            <button onClick={exportDoc} title="Download the briefing note as a Word-openable .doc" className={btn("ghost")}>
-              ⇩ .doc
-            </button>
-            <button onClick={() => go({ kind: "mindmap", id })} title="Per-case mind map" className={btn("ghost")}>
-              Mind map
-            </button>
+            <MoreMenu
+              items={[
+                { label: "Mind map", title: "Per-case mind map", onClick: () => go({ kind: "mindmap", id }) },
+                { label: "Export .ics", title: "Export this case's deadlines as .ics", onClick: exportCaseIcs },
+                { label: "Download .doc", title: "Download the briefing note as a Word-openable .doc", onClick: exportDoc },
+              ]}
+            />
             <button onClick={() => go({ kind: "dashboard" })} className={btn("ghost")}>
               Back
             </button>
@@ -259,6 +282,7 @@ export function CaseDetail({ id }: { id: string }) {
             </button>
           </>
         }
+        below={<CaseToc items={TOC_ITEMS} />}
       />
       {priorityWarn && (
         <p className="mt-2 rounded-lg border border-statutory/40 bg-statutory/10 px-3 py-2 text-xs text-statutory">⚠ {priorityWarn}</p>
@@ -320,49 +344,85 @@ export function CaseDetail({ id }: { id: string }) {
         </div>
       )}
 
-      {/* Clocks strip */}
-      <Section title="Statutory & court clocks" className="mt-3">
-        {clocks.length === 0 ? (
-          <p className="py-4 text-center text-sm text-soft">No live clocks (set custody anchors to start them)</p>
-        ) : (
-          <div className="space-y-1.5">
-            {clocks.map((d) => (
-              <ClockRow key={`${d.ruleId}:${d.occurrenceDate ?? ""}:${d.instanceId ?? ""}`} d={d} today={today} />
-            ))}
-          </div>
-        )}
-      </Section>
+      {/* Clocks strip. Each panel below sits in an id-anchored wrapper so the
+          sticky TOC rail can jump to it (scroll-mt clears the sticky header). */}
+      <div id="sec-clocks" className={TOC_SCROLL_MARGIN}>
+        <Section title="Statutory & court clocks" className="mt-3">
+          {clocks.length === 0 ? (
+            <p className="py-4 text-center text-sm text-soft">No live clocks (set custody anchors to start them)</p>
+          ) : (
+            <div className="space-y-1.5">
+              {clocks.map((d) => (
+                <ClockRow key={`${d.ruleId}:${d.occurrenceDate ?? ""}:${d.instanceId ?? ""}`} d={d} today={today} />
+              ))}
+            </div>
+          )}
+        </Section>
+      </div>
 
       {/* The officer's 13-heading case file + the 11-status accused list */}
-      <CaseFile
-        agg={agg}
-        onSaveCase={saveCase}
-        onSaveChargesheets={saveChargesheets}
-        onSaveProgress={saveProgress}
-        onSavePlan={savePlan}
-        onSaveHearings={saveHearings}
-      />
-      <AccusedPanel agg={agg} onSavePersons={savePersons} />
-      <WitnessPanel agg={agg} onSavePersons={savePersons} />
+      <div id="sec-file" className={TOC_SCROLL_MARGIN}>
+        <CaseFile
+          agg={agg}
+          onSaveCase={saveCase}
+          onSaveChargesheets={saveChargesheets}
+          onSaveProgress={saveProgress}
+          onSavePlan={savePlan}
+          onSaveHearings={saveHearings}
+        />
+      </div>
+      <div id="sec-accused" className={TOC_SCROLL_MARGIN}>
+        <AccusedPanel agg={agg} onSavePersons={savePersons} />
+      </div>
+      <div id="sec-witnesses" className={TOC_SCROLL_MARGIN}>
+        <WitnessPanel agg={agg} onSavePersons={savePersons} />
+      </div>
 
       {/* The two engines: investigation (FR/PR/custody) + court-trial (timeline + hearings) */}
-      <InvestigationPanel agg={agg} onSaveCase={saveCase} />
-      <PipelinePanel agg={agg} onSaveCase={saveCase} />
-      <TrialPanel agg={agg} onSaveCase={saveCase} />
-      <HearingsPanel agg={agg} onSaveHearings={saveHearings} />
+      <div id="sec-investigation" className={TOC_SCROLL_MARGIN}>
+        <InvestigationPanel agg={agg} onSaveCase={saveCase} />
+      </div>
+      <div id="sec-pipeline" className={TOC_SCROLL_MARGIN}>
+        <PipelinePanel agg={agg} onSaveCase={saveCase} />
+      </div>
+      <div id="sec-trial" className={TOC_SCROLL_MARGIN}>
+        <TrialPanel agg={agg} onSaveCase={saveCase} />
+      </div>
+      <div id="sec-hearings" className={TOC_SCROLL_MARGIN}>
+        <HearingsPanel agg={agg} onSaveHearings={saveHearings} />
+      </div>
 
       {/* Phase 3 + T2 panels: evidence·custody ledger·comms·sanctions·place·reference */}
-      <EvidencePanel agg={agg} onSaveEvidence={saveEvidence} />
-      <CustodyLedgerPanel agg={agg} onSaveMovements={saveMovements} />
-      <CommsPanel agg={agg} onSaveComms={saveComms} onSaveTowers={saveTowers} />
-      <RequestsPanel agg={agg} onSaveRequests={saveRequests} />
-      <SanctionsPanel agg={agg} onSaveCase={saveCase} />
-      <PlacePanel agg={agg} onSaveCase={saveCase} />
-      <GalleryPanel agg={agg} />
-      <DocumentsPanel agg={agg} />
-      <ReferenceLawsPanel />
+      <div id="sec-evidence" className={TOC_SCROLL_MARGIN}>
+        <EvidencePanel agg={agg} onSaveEvidence={saveEvidence} />
+      </div>
+      <div id="sec-custody" className={TOC_SCROLL_MARGIN}>
+        <CustodyLedgerPanel agg={agg} onSaveMovements={saveMovements} />
+      </div>
+      <div id="sec-comms" className={TOC_SCROLL_MARGIN}>
+        <CommsPanel agg={agg} onSaveComms={saveComms} onSaveTowers={saveTowers} />
+      </div>
+      <div id="sec-requests" className={TOC_SCROLL_MARGIN}>
+        <RequestsPanel agg={agg} onSaveRequests={saveRequests} />
+      </div>
+      <div id="sec-sanctions" className={TOC_SCROLL_MARGIN}>
+        <SanctionsPanel agg={agg} onSaveCase={saveCase} />
+      </div>
+      <div id="sec-place" className={TOC_SCROLL_MARGIN}>
+        <PlacePanel agg={agg} onSaveCase={saveCase} />
+      </div>
+      <div id="sec-gallery" className={TOC_SCROLL_MARGIN}>
+        <GalleryPanel agg={agg} />
+      </div>
+      <div id="sec-documents" className={TOC_SCROLL_MARGIN}>
+        <DocumentsPanel agg={agg} />
+      </div>
+      <div id="sec-reference" className={TOC_SCROLL_MARGIN}>
+        <ReferenceLawsPanel />
+      </div>
 
       {/* Timeline */}
+      <div id="sec-timeline" className={TOC_SCROLL_MARGIN}>
       <Section title="Supervision timeline" className="mt-3">
         {entries.length === 0 ? (
           <p className="py-3 text-center text-sm text-soft">No notes yet</p>
@@ -383,8 +443,10 @@ export function CaseDetail({ id }: { id: string }) {
           </ol>
         )}
       </Section>
+      </div>
 
       {/* Log note */}
+      <div id="sec-note" className={TOC_SCROLL_MARGIN}>
       <Section title="Log supervisory note" className="mt-3">
         <div className="space-y-3">
           <Field label="What was done / current status *">
@@ -409,6 +471,7 @@ export function CaseDetail({ id }: { id: string }) {
           </div>
         </div>
       </Section>
+      </div>
     </div>
   );
 }
